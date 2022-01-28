@@ -6,7 +6,7 @@
 #    By: toliver <marvin@42.fr>                     +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2017/11/12 01:24:53 by toliver           #+#    #+#              #
-#    Updated: 2020/01/20 11:11:01 by toliver          ###   ########.fr        #
+#    Updated: 2022/01/28 14:51:50 by toliver          ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -77,12 +77,14 @@ OBJS = $(addprefix objs/, $(addsuffix .o, \
 	   $(addprefix ft_, $(FILES)) \
 	   ))
 
+CC = clang
+
 .PHONY: all clean fclean re
 
 all: $(NAME)
 
 analyze: 
-	gcc --analyze $(addprefix srcs/, $(addsuffix .c, $(addprefix ft_, $(FILES))))  $(INCLUDES)
+	$(CC) --analyze $(addprefix srcs/, $(addsuffix .c, $(addprefix ft_, $(FILES))))  $(INCLUDES)
 	#	gcc -fsyntax-only $(addprefix srcs/, $(addsuffix .c, $(addprefix ft_, $(FILES))))  $(INCLUDES)
 
 $(NAME): objs $(OBJS)
@@ -91,7 +93,7 @@ $(NAME): objs $(OBJS)
 
 objs/%.o: srcs/%.c
 	@printf  "\033[1:92mCompiling $(NAME)\033[0m %-31s\033[32m[$<]\033[0m\n" ""
-	@gcc -o $@ -c $< $(FLAGS) $(INCLUDES)
+	@$(CC) -o $@ -c $< $(FLAGS) $(INCLUDES)
 	@printf "\033[A\033[2K"
 
 objs:

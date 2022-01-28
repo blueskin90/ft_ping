@@ -6,7 +6,7 @@
 /*   By: toliver <toliver@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2017/11/15 00:43:10 by toliver           #+#    #+#             */
-/*   Updated: 2020/01/07 00:24:17 by toliver          ###   ########.fr       */
+/*   Updated: 2022/01/28 17:39:32 by toliver          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -63,9 +63,9 @@ static t_lst		*get_elem(t_lst **lst, int fd)
 static int			split_and_return(t_lst *lst, char **line)
 {
 	char			*tmp;
-	int				nl_pos;
+	long long int	nl_pos;
 
-	if (!(nl_pos = (int)ft_strchr(lst->str, '\n')))
+	if (!(nl_pos = (long long int)ft_strchr(lst->str, '\n')))
 	{
 		*line = lst->str;
 		lst->str = NULL;
@@ -73,7 +73,7 @@ static int			split_and_return(t_lst *lst, char **line)
 			return (1);
 		return (0);
 	}
-	nl_pos -= (int)lst->str;
+	nl_pos -= (long long int)lst->str;
 	if (!(*line = ft_strsub(lst->str, 0, nl_pos)))
 		return (-1);
 	if (!(tmp = ft_strsub(lst->str, nl_pos + 1,

@@ -13,6 +13,8 @@
 #include <stdlib.h>
 #include <signal.h>
 
+#include <stdio.h>
+
 # define HANDLED_FLAGS "v"
 
 typedef struct		s_env

@@ -1,12 +1,12 @@
 # **************************************************************************** #
 #                                                                              #
 #                                                         :::      ::::::::    #
-#    Makefile                                           :+:      :+:    :+:    #
+#    makefile                                           :+:      :+:    :+:    #
 #                                                     +:+ +:+         +:+      #
 #    By: toliver <marvin@42.fr>                     +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2018/09/20 19:50:33 by toliver           #+#    #+#              #
-#    Updated: 2021/10/06 18:06:01 by toliver          ###   ########.fr        #
+#    Updated: 2022/01/28 14:50:57 by toliver          ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -28,17 +28,19 @@ OBJS = $(addprefix objs/, $(addsuffix .o, \
 				) \
 		)) 
 
+CC = gcc
+
 HEADERS = ./includes/ft_ping.h
 
 all: $(NAME)
 
 $(NAME): $(LIBS) objs $(OBJS) $(HEADERS)
 	@printf "\033[92m\033[1:32mCompiling -------------> \033[91m$(NAME)\033[0m:\033[0m%-16s\033[32m[✔]\033[0m\n"
-	@gcc $(FLAGS) $(OBJS) $(INCLUDES) -o $(NAME) $(LIBS) 
+	@$(CC) $(FLAGS) $(OBJS) $(INCLUDES) -o $(NAME) $(LIBS) 
 
 objs/%.o: srcs/%.c
 	@printf  "\033[1:92mCompiling $(NAME)\033[0m %-31s\033[32m[$<]\033[0m\n" ""
-	@gcc -o $@ -c $< $(FLAGS) -fPIC $(INCLUDES)
+	@$(CC) -o $@ -c $< $(FLAGS) -fPIC $(INCLUDES)
 	@printf "\033[A\033[2K"
 
 objs:

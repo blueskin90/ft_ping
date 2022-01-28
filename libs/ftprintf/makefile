@@ -1,18 +1,18 @@
 # **************************************************************************** #
 #                                                                              #
 #                                                         :::      ::::::::    #
-#    Makefile                                           :+:      :+:    :+:    #
+#    makefile                                           :+:      :+:    :+:    #
 #                                                     +:+ +:+         +:+      #
 #    By: toliver <marvin@42.fr>                     +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2017/11/12 01:24:53 by toliver           #+#    #+#              #
-#    Updated: 2020/01/18 18:51:21 by toliver          ###   ########.fr        #
+#    Updated: 2022/01/28 17:45:37 by toliver          ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
 NAME = libftprintf.a
 
-FLAGS = -Werror -Wextra -Wall -Ofast -g3
+FLAGS = -Werror -Wextra -Wall -Ofast -g3 -fPIE
 
 FILES = ft_printf \
 		parsing \
@@ -58,6 +58,8 @@ FILES = ft_printf \
 		buff_fillfloat_error \
 		buff_fillfloat_hexautil  
 
+CC = clang
+
 SRC = $(addsuffix .c, $(FILES))
 
 SRC_PATH = ./srcs/
@@ -82,7 +84,7 @@ $(NAME): objs $(OBJS) $(HEADERS)
 
 objs/%.o: srcs/%.c $(HEADERS)
 	@printf  "\033[1:92mCompiling $(NAME)\033[0m %-31s\033[32m[$<]\033[0m\n" ""
-	@gcc -o $@ -c $< $(FLAGS) $(INCLUDES)
+	@$(CC) -o $@ -c $< $(FLAGS) $(INCLUDES)
 	@printf "\033[A\033[2K"
 
 objs:

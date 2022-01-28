@@ -6,7 +6,7 @@
 /*   By: toliver <marvin@42.fr>                     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2018/01/29 15:30:16 by toliver           #+#    #+#             */
-/*   Updated: 2018/12/23 19:40:55 by toliver          ###   ########.fr       */
+/*   Updated: 2022/01/28 17:42:51 by toliver          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,6 +19,7 @@
 # include <sys/types.h>
 # include <wchar.h>
 # include <stddef.h>
+# include <stdint.h>
 
 # define BUFFSIZE 2048
 # define DBL_MAX_EXP_VAL 0x7FF
