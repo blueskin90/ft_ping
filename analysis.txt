@@ -1,0 +1,35 @@
+listening on enp0s3, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+ping 8.8.8.8
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=63 time=1.88 ms
+13:00:57.251354 08:00:27:02:4f:06 > 52:54:00:12:35:02, ethertype IPv4 (0x0800), length 98: 10.0.2.15 > 8.8.8.8: ICMP echo request, id 17811, seq 1, length 64
+	0x0000:  5254 0012 3502 0800 2702 4f06 0800 4500  RT..5...'.O...E.
+	0x0010:  0054 7b48 4000 4001 a342 0a00 020f 0808  .T{H@.@..B......
+	0x0020:  0808 0800 b5e7 4593 0001 4975 3266 0000  ......E...Iu2f..
+	0x0030:  0000 bed5 0300 0000 0000 1011 1213 1415  ................
+	0x0040:  1617 1819 1a1b 1c1d 1e1f 2021 2223 2425  ...........!"#$%
+	0x0050:  2627 2829 2a2b 2c2d 2e2f 3031 3233 3435  &'()*+,-./012345
+	0x0060:  3637                                     67
+13:00:57.253205 52:54:00:12:35:02 > 08:00:27:02:4f:06, ethertype IPv4 (0x0800), length 98: 8.8.8.8 > 10.0.2.15: ICMP echo reply, id 17811, seq 1, length 64
+	0x0000:  0800 2702 4f06 5254 0012 3502 0800 4500  ..'.O.RT..5...E.
+	0x0010:  0054 2d06 4000 3f01 f284 0808 0808 0a00  .T-.@.?.........
+	0x0020:  020f 0000 bde7 4593 0001 4975 3266 0000  ......E...Iu2f..
+	0x0030:  0000 bed5 0300 0000 0000 1011 1213 1415  ................
+	0x0040:  1617 1819 1a1b 1c1d 1e1f 2021 2223 2425  ...........!"#$%
+	0x0050:  2627 2829 2a2b 2c2d 2e2f 3031 3233 3435  &'()*+,-./012345
+	0x0060:  3637                                     67
+^C
+--- 8.8.8.8 ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 1.879/1.879/1.879/0.000 ms
+
+
+
+5254 0012 3502 / 0800 2702 4f06 / 0800 /4/5/00  dest mac / source mac / Ethertype /(here start IP protocol)Version/IHL/TOS
+0054 /7b48 /4000 /40/01 / a342 /0a00 020f /0808   total-length/identification/flags-fragmentoffset/ttl/protocol/??/ip source/start-ip-dest 
+0808 /08/00/b5e7/ 4593 / 0001 / 4975 3266 0000  end-ip-dest(end of ip protocol)/(icmp-protocol)message-type/code/ checksum / identifier / sequence number/ time 64 bit float
+0000 / bed5 0300 0000 0000 1011 1213 1415 
+1617 1819 1a1b 1c1d 1e1f 2021 2223 2425 
+2627 2829 2a2b 2c2d 2e2f 3031 3233 3435 
+3637
+
