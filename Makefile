@@ -17,14 +17,14 @@ INCLUDES = -I includes\
 		   -I ./libs/libft/includes\
 		   -I ./libs/ftprintf/includes
 
-LIBS =	./libs/libft/libft.a\
-		./libs/ftprintf/libftprintf.a\
-
 FLAGS = -Wall -Wextra -Werror -g3
 
 OBJS = $(addprefix objs/, $(addsuffix .o, \
 			$(addprefix ping/, \
 				main \
+				) \
+			$(addprefix parsing/, \
+				parsing \
 				) \
 		)) 
 
@@ -34,7 +34,7 @@ HEADERS = ./includes/ft_ping.h
 
 all: $(NAME)
 
-$(NAME): $(LIBS) objs $(OBJS) $(HEADERS)
+$(NAME): objs $(OBJS) $(HEADERS)
 	@printf "\033[92m\033[1:32mCompiling -------------> \033[91m$(NAME)\033[0m:\033[0m%-16s\033[32m[✔]\033[0m\n"
 	@$(CC) $(FLAGS) $(OBJS) $(INCLUDES) -o $(NAME) $(LIBS) 
 
@@ -45,10 +45,7 @@ objs/%.o: srcs/%.c
 
 objs:
 	@mkdir -p objs/ping
-
-$(LIBS):
-	@make -C ./libs/libft/.
-	@make -C ./libs/ftprintf/.
+	@mkdir -p objs/parsing
 
 clean:
 	@printf  "\033[1:32mCleaning object files -> \033[91m$(NAME)\033[0m\033[1:32m:\033[0m%-16s\033[32m[✔]\033[0m\n"
