@@ -27,6 +27,7 @@ enum e_errorcode {
 	PARSING_ERROR,
 	INVALID_ARGUMENT,
 	INVALID_OPTION,
+	RESOLUTION_ERROR,
 	USAGE,
 };
 
@@ -47,7 +48,6 @@ struct s_env
 	struct icmp4_hdr *hdr;
 	uint64_t flags;
 	size_t count;
-	int sock;
 };
 
 # endif /* FT_PING_H */

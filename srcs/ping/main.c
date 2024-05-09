@@ -57,16 +57,50 @@ int parse_count(struct s_env *env, int ac, char **av, int *i)
 	return SUCCESS;
 }
 
+void dump_res(struct addrinfo *res)
+{
+	struct sockaddr_in *addr;
+
+	while (res) {
+		printf("flags %#.4x\n", res->ai_flags);
+		printf("family %#.4x\n", res->ai_family);
+		printf("socktype %#.4x\n", res->ai_socktype);
+		printf("protocol %#.4x\n", res->ai_protocol);
+		printf("addrlen %#.4x\n", res->ai_addrlen);
+		addr = (struct sockaddr_in*)res->ai_addr;
+		if (addr) {
+			printf("family %#.2hhx\n", addr->sin_family);
+			printf("sin_port %#.hhx\n", addr->sin_port);
+			printf("address %s\n", inet_ntoa(addr->sin_addr));
+		}
+		else
+			printf("struct sockaddr NULL\n");
+		printf("name %s\n", res->ai_canonname);
+		res = res->ai_next;
+	}
+}
+
 int parse_dest(struct s_env *env, char *dest)
 {
-	printf("dest is %s\n", dest);
+	struct addrinfo hints;
+	struct addrinfo *res;
+	int retval;
+
+	bzero(&hints, sizeof(hints));
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_RAW;
+	hints.ai_protocol = IPPROTO_ICMP;
+	retval = getaddrinfo(dest, 0, &hints, &res);
+	printf("AF_INET %d\n", AF_INET);
+	if (retval < 0) {
+		printf("Couldn't resolve host %s: %s\n", dest, gai_strerror(retval));
+		freeaddrinfo(res);
+		return RESOLUTION_ERROR;
+	}
 	env->daddr.sin_family = AF_INET;
 	env->daddr.sin_port = 0;
-	if (inet_pton(AF_INET, dest, &(env->daddr.sin_addr)) != 1)
-	{
-		fprintf(stderr, "destination IP configuration failed\n");
-		return PARSING_ERROR;
-	}
+	memcpy(&env->daddr.sin_addr, &((struct sockaddr_in*)res->ai_addr)->sin_addr, sizeof(env->daddr.sin_addr));
+	freeaddrinfo(res);
 	return SUCCESS;
 }
 
@@ -109,15 +143,89 @@ int args_parsing(struct s_env *env, int ac, char **av)
 
 int init_env(struct s_env *env)
 {
-	(void)env;
 	srand(time(0));
 	env->ident = rand();
+	env->saddr.sin_family = AF_INET;
+	env->saddr.sin_port = 0;
+	if (inet_pton(AF_INET, "10.0.2.15", &env->saddr.sin_addr) != 1)
+	{
+		printf("source IP configuration failed\n");
+		return (0);
+	}
 	return SUCCESS;
+}
+
+int			fill_header(struct s_env *env, char *buffer, size_t buffsize)
+{
+	struct icmp4_hdr *hdr = (struct icmp4_hdr *)buffer;
+
+	if (buffsize < sizeof(struct icmp4_hdr))
+		return (0);
+	bzero(hdr, sizeof(*hdr));
+	hdr->msg_type = ECHO_REQUEST;
+	hdr->ident = env->ident;
+	hdr->sequence = 1;
+	return (1);
+}
+
+void			fill_buffer(char *buffer, size_t buffsize)
+{
+	snprintf(buffer, buffsize, "pouet");
+}
+
+int			calculate_checksum(char *buffer, size_t buffsize)
+{
+	struct icmp4_hdr *hdr = (struct icmp4_hdr*)buffer;
+	size_t buffsize_uint16 = buffsize / 2;
+	uint16_t *buf = (uint16_t*)buffer;
+	uint32_t checksum = 0;
+	size_t i;
+
+	if (buffsize == 0)
+		return 0;
+	for(i = 0; i < buffsize_uint16; i++)
+		checksum += buf[i];
+	if (buffsize % 2)
+		checksum += (((uint16_t)buffer[buffsize - 1]) << 8);
+	// folding checksum to get an uint16_t back
+	checksum = (checksum & 0xffff) + (checksum >> 16);
+	hdr->checksum = ~checksum;
+	return 1;
 }
 
 int ping(struct s_env *env)
 {
-	(void)env;
+	int sock;
+	char buffer[MSG_MAX_LEN];
+	int retval;
+
+// check for CAP_NET_RAW capability in user namespace
+	sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	if (sock < 0)
+	{
+		printf("Couldn't create the socket: %s\n", strerror(errno));
+		return 0;
+	}
+	retval = bind(sock, (struct sockaddr*)&env->saddr, sizeof(env->saddr));
+	if (retval < 0)
+	{
+		printf("error : %s\n", strerror(errno));
+		return (0);
+	}
+	bzero(buffer, sizeof(buffer));
+	if (!fill_header(env, buffer,sizeof(buffer)))
+	{
+		printf("Didn't have enough space for the ICMP header\n");
+		return (0);
+	}
+	fill_buffer(buffer + sizeof(struct icmp4_hdr), sizeof(buffer) - sizeof(struct icmp4_hdr));
+	calculate_checksum(buffer, sizeof(buffer));
+	retval = sendto(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&env->daddr, sizeof(env->daddr));
+	if (retval < 0)
+	{
+		printf("error : %s\n", strerror(errno));
+		return (0);
+	}
 	return SUCCESS;
 }
 
@@ -126,6 +234,7 @@ int			main(int ac, char **av)
 	struct s_env env;
 	int retval;
 
+	bzero(&env, sizeof(env));
 	retval = args_parsing(&env, ac, av);
 	if (retval != SUCCESS)
 		return retval;
