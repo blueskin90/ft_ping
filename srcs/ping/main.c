@@ -5,137 +5,133 @@
 #include <stdlib.h>
 #include <time.h>
 
-int		ft_usage(void)
+int usage(struct s_env *env)
 {
-	printf("usage: ping [-%s] [-h sweepincrsize] host\n", HANDLED_FLAGS);
-	return (1);
+	fprintf(stderr, "\nUsage:\n");
+	fprintf(stderr, "  %s [options] <destination>\n", env->progname);
+	return USAGE;
 }
 
-void		ft_print_addrinfo(struct addrinfo *ptr)
+int invalid_option(struct s_env *env, char *arg)
 {
-	printf("flags : %d\n", ptr->ai_flags);
-	printf("family : %d\n", ptr->ai_family);
-	printf("socktype : %d\n", ptr->ai_socktype);
-	printf("protocol : %d\n", ptr->ai_protocol);
+	fprintf(stderr, "%s: invalid option -- '%.1s'\n", env->progname, arg + 1);
+	usage(env);
+	return INVALID_OPTION;
 }
 
-void		ft_ping(t_env *env)
+int invalid_argument(struct s_env *env, char *arg)
 {
-	struct addrinfo	hints;
-	struct addrinfo *res;
-	//int				error;
+	fprintf(stderr, "%s: invalid argument: '%s'\n", env->progname, arg);
+	return INVALID_ARGUMENT;
+}
 
+int option_requires_argument(struct s_env *env, char *option)
+{
+	fprintf(stderr, "%s: option requires an argument -- '%s'\n", env->progname, option + 1);
+	usage(env);
+	return INVALID_ARGUMENT;
+}
+
+int parse_count(struct s_env *env, int ac, char **av, int *i)
+{
+	int found = 0;
+	size_t count;
+	char *end;
+
+	env->flags |= COUNT_FLAG;
+	if (av[*i][2] != 0) {							// parse in same arg
+		count = strtoll(&(av[*i][2]), &end, 10);
+		if (*end != 0)
+			return invalid_argument(env, &(av[*i][2]));
+		found = 1;
+	}
+	if (!found) {									// parse next arg as complement
+			if (*i + 1 == ac)
+				return option_requires_argument(env, av[*i]);
+			(*i)++;
+			count = strtoll(av[*i], &end, 10);
+			if (end == av[*i] || *end != 0)
+				return invalid_argument(env, av[*i]);
+	}
+	env->count = count;
+	return SUCCESS;
+}
+
+int parse_dest(struct s_env *env, char *dest)
+{
+	printf("dest is %s\n", dest);
+	env->daddr.sin_family = AF_INET;
+	env->daddr.sin_port = 0;
+	if (inet_pton(AF_INET, dest, &(env->daddr.sin_addr)) != 1)
+	{
+		fprintf(stderr, "destination IP configuration failed\n");
+		return PARSING_ERROR;
+	}
+	return SUCCESS;
+}
+
+int parse_arg(struct s_env *env, int ac, char **av, int *i)
+{
+	if (*i == ac - 1)
+		return parse_dest(env, av[*i]);
+	if (strncmp(av[*i], "-c", 2) == 0)
+		return parse_count(env, ac, av, i);
+	else if (strcmp(av[*i], "-v") == 0) {
+		env->flags |= VERBOSE_FLAG;
+	}
+	else if (strcmp(av[*i], "-h") == 0) {
+		return usage(env);
+	}
+	else {
+		return invalid_option(env, av[*i]);
+	}
+	return SUCCESS;
+}
+
+int args_parsing(struct s_env *env, int ac, char **av)
+{
+	int retval;
+	int i = 1;
+
+	env->progname = av[0];
+	if (ac < 2) {
+		fprintf(stderr, "%s: usage error: Destination address required\n", env->progname);
+		return PARSING_ERROR;
+	}
+	while (i < ac) {
+		retval = parse_arg(env, ac, av, &i);
+		if (retval != SUCCESS)
+			return retval;
+		i++;
+	}
+	return SUCCESS;
+}
+
+int init_env(struct s_env *env)
+{
 	(void)env;
-
-	res = NULL;
-	bzero(&hints, sizeof(struct addrinfo));
-	hints.ai_family = PF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-/*
-	error = getaddrinfo(env->dest, "http", &hints, &res);
-	if (error)
-	{
-		printf("error %d: %s\n", error, gai_strerror(error));
-		return ;
-	}
-	*/
-	ft_print_addrinfo(res);
-}
-
-int			fill_header(char *buffer, size_t buffsize)
-{
-	struct icmp4_hdr *hdr = (struct icmp4_hdr *)buffer;
-	
-	if (buffsize < sizeof(struct icmp4_hdr))
-		return (0);
-	bzero(hdr, sizeof(*hdr));
-	hdr->msg_type = ECHO_REQUEST; 
-	// checksum checked after data are added
-	hdr->ident = rand();
-	hdr->sequence = 1;
-	return (1);
-}
-
-void			fill_buffer(char *buffer, size_t buffsize)
-{
-	snprintf(buffer, buffsize, "pouet");	
-}
-
-int			calculate_checksum(char *buffer, size_t buffsize)
-{
-	struct icmp4_hdr *hdr = (struct icmp4_hdr*)buffer;
-	size_t buffsize_uint16 = buffsize / 2;
-	uint16_t *buf = (uint16_t*)buffer;
-	uint32_t checksum = 0;
-	size_t i;
-
-	if (buffsize == 0)
-		return 0;
-	for(i = 0; i < buffsize_uint16; i++)
-		checksum += buf[i];
-	if (buffsize % 2)
-		checksum += (((uint16_t)buffer[buffsize - 1]) << 8);
-	// folding checksum to get an uint16_t back
-	checksum = (checksum & 0xffff) + (checksum >> 16);
-	hdr->checksum = ~checksum;
-	return 1;
-}
-
-int			ping(void)
-{
-	int sock;
-	struct sockaddr_in saddr;
-	struct sockaddr_in daddr;
-	char buffer[MSG_MAX_LEN];
-
 	srand(time(0));
-	saddr.sin_family = AF_INET;
-	saddr.sin_port = 0;
-	if (inet_pton(AF_INET, "10.0.2.15", &saddr.sin_addr) != 1)
-	{
-		printf("source IP configuration failed\n");
-		return (0);
-	}
+	env->ident = rand();
+	return SUCCESS;
+}
 
-	daddr.sin_family = AF_INET;
-	daddr.sin_port = 0;
-	if (inet_pton(AF_INET, "8.8.8.8", &daddr.sin_addr) != 1)
-	{
-		printf("destination IP configuration failed\n");
-		return (0);
-	}
-
-
-// check for CAP_NET_RAW capability in user namespace
-	sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP); 
-	if (sock < 0)
-	{
-		printf("Couldn't create the socket: %s\n", strerror(errno));
-		return 0;
-	}
-	bind(sock, (struct sockaddr*)&saddr, sizeof(saddr));
-
-	bzero(buffer, sizeof(buffer));
-	if (!fill_header(buffer,sizeof(buffer)))
-	{
-		printf("Didn't have enough space for the ICMP header\n");
-		return (0);
-	}
-	fill_buffer(buffer + sizeof(struct icmp4_hdr), sizeof(buffer) - sizeof(struct icmp4_hdr));
-	calculate_checksum(buffer, sizeof(buffer));
-	sendto(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&daddr, sizeof(daddr));
-	return (sock);
+int ping(struct s_env *env)
+{
+	(void)env;
+	return SUCCESS;
 }
 
 int			main(int ac, char **av)
 {
-	t_env	env;
+	struct s_env env;
+	int retval;
 
-	if (ac < 2)
-		return (ft_usage());
-	if (!args_parsing(&env, ac - 1, av + 1))
-		return (1);
-//	ft_ping(&env);	
-	ping();
-	return (0);
+	retval = args_parsing(&env, ac, av);
+	if (retval != SUCCESS)
+		return retval;
+	retval = init_env(&env);
+	if (retval != SUCCESS)
+		return retval;
+	ping(&env);
+	return 0;
 }

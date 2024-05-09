@@ -22,6 +22,14 @@
 #define ECHO_REQUEST 8
 #define ECHO_REPLY 0
 
+enum e_errorcode {
+	SUCCESS,
+	PARSING_ERROR,
+	INVALID_ARGUMENT,
+	INVALID_OPTION,
+	USAGE,
+};
+
 struct icmp4_hdr {
 	uint8_t	msg_type;
 	uint8_t	code;
@@ -30,16 +38,16 @@ struct icmp4_hdr {
 	uint16_t sequence;
 };
 
-typedef struct		s_env
+struct s_env
 {
+	char *progname;
 	uint16_t ident;
 	struct sockaddr_in saddr;
 	struct sockaddr_in daddr;
 	struct icmp4_hdr *hdr;
 	uint64_t flags;
 	size_t count;
-}			t_env;
-
-int		args_parsing(t_env* env, int ac, char **av);
+	int sock;
+};
 
 # endif /* FT_PING_H */

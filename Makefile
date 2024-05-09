@@ -23,9 +23,6 @@ OBJS = $(addprefix objs/, $(addsuffix .o, \
 			$(addprefix ping/, \
 				main \
 				) \
-			$(addprefix parsing/, \
-				parsing \
-				) \
 		)) 
 
 CC = gcc
