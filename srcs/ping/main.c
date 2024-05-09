@@ -23,7 +23,7 @@ void		ft_ping(t_env *env)
 {
 	struct addrinfo	hints;
 	struct addrinfo *res;
-	int				error;
+	//int				error;
 
 	(void)env;
 
@@ -31,20 +31,21 @@ void		ft_ping(t_env *env)
 	bzero(&hints, sizeof(struct addrinfo));
 	hints.ai_family = PF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
-
+/*
 	error = getaddrinfo(env->dest, "http", &hints, &res);
 	if (error)
 	{
 		printf("error %d: %s\n", error, gai_strerror(error));
 		return ;
 	}
+	*/
 	ft_print_addrinfo(res);
 }
 
 int			fill_header(char *buffer, size_t buffsize)
 {
 	struct icmp4_hdr *hdr = (struct icmp4_hdr *)buffer;
-
+	
 	if (buffsize < sizeof(struct icmp4_hdr))
 		return (0);
 	bzero(hdr, sizeof(*hdr));
@@ -60,36 +61,24 @@ void			fill_buffer(char *buffer, size_t buffsize)
 	snprintf(buffer, buffsize, "pouet");	
 }
 
-void			calculate_checksum(char *buffer, size_t buffsize)
+int			calculate_checksum(char *buffer, size_t buffsize)
 {
-	uint16_t *buf = (uint16_t*)buffer;
 	struct icmp4_hdr *hdr = (struct icmp4_hdr*)buffer;
-	uint16_t checksum = 0;
+	size_t buffsize_uint16 = buffsize / 2;
+	uint16_t *buf = (uint16_t*)buffer;
+	uint32_t checksum = 0;
 	size_t i;
 
-	buffsize /= 2; // penser au cas ou buffsize est impair
-	for(i = 0; i < buffsize; i++)
+	if (buffsize == 0)
+		return 0;
+	for(i = 0; i < buffsize_uint16; i++)
 		checksum += buf[i];
 	if (buffsize % 2)
-		checksum += (buffer[buffsize - 1] << 8);
-
-	for (i = 0; i < buffsize; i++)
-	{
-		printf("%.4hx ", buffer[i]);
-		if (i % 8 == 0 && i != 0)
-			printf("\n");
-	}
-
-
-	hdr->checksum = ~checksum - 1; // why do i have to take 1 less ?
-	printf("checksum non inverted : %hx\ninverted %hx\n correct one not inverted %hx\ncorect one %hx\n", checksum, ~checksum, ~((~checksum) - 1), ~(checksum - 1));
-
-	for (i = 0; i < buffsize; i++)
-	{
-		printf("%.4hx ", buffer[i]);
-		if (i % 8 == 0 && i != 0)
-			printf("\n");
-	}
+		checksum += (((uint16_t)buffer[buffsize - 1]) << 8);
+	// folding checksum to get an uint16_t back
+	checksum = (checksum & 0xffff) + (checksum >> 16);
+	hdr->checksum = ~checksum;
+	return 1;
 }
 
 int			ping(void)
@@ -101,7 +90,7 @@ int			ping(void)
 
 	srand(time(0));
 	saddr.sin_family = AF_INET;
-	saddr.sin_port = 6942;
+	saddr.sin_port = 0;
 	if (inet_pton(AF_INET, "10.0.2.15", &saddr.sin_addr) != 1)
 	{
 		printf("source IP configuration failed\n");
@@ -109,7 +98,7 @@ int			ping(void)
 	}
 
 	daddr.sin_family = AF_INET;
-	daddr.sin_port = 42069;
+	daddr.sin_port = 0;
 	if (inet_pton(AF_INET, "8.8.8.8", &daddr.sin_addr) != 1)
 	{
 		printf("destination IP configuration failed\n");
@@ -120,12 +109,18 @@ int			ping(void)
 // check for CAP_NET_RAW capability in user namespace
 	sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP); 
 	if (sock < 0)
+	{
 		printf("Couldn't create the socket: %s\n", strerror(errno));
+		return 0;
+	}
 	bind(sock, (struct sockaddr*)&saddr, sizeof(saddr));
 
 	bzero(buffer, sizeof(buffer));
 	if (!fill_header(buffer,sizeof(buffer)))
+	{
 		printf("Didn't have enough space for the ICMP header\n");
+		return (0);
+	}
 	fill_buffer(buffer + sizeof(struct icmp4_hdr), sizeof(buffer) - sizeof(struct icmp4_hdr));
 	calculate_checksum(buffer, sizeof(buffer));
 	sendto(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&daddr, sizeof(daddr));

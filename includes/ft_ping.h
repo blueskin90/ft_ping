@@ -13,16 +13,14 @@
 #include <stdio.h>
 #include <strings.h>
 
+# define COUNT_FLAG 0x1
+# define VERBOSE_FLAG 0x2
+
 # define HANDLED_FLAGS "v"
 # define MSG_MAX_LEN 64
 
 #define ECHO_REQUEST 8
 #define ECHO_REPLY 0
-
-typedef struct		s_env
-{
-	char			*dest;
-}			t_env;
 
 struct icmp4_hdr {
 	uint8_t	msg_type;
@@ -31,6 +29,16 @@ struct icmp4_hdr {
 	uint16_t ident;
 	uint16_t sequence;
 };
+
+typedef struct		s_env
+{
+	uint16_t ident;
+	struct sockaddr_in saddr;
+	struct sockaddr_in daddr;
+	struct icmp4_hdr *hdr;
+	uint64_t flags;
+	size_t count;
+}			t_env;
 
 int		args_parsing(t_env* env, int ac, char **av);
 
