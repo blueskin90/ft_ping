@@ -15,12 +15,16 @@
 
 # define COUNT_FLAG 0x1
 # define VERBOSE_FLAG 0x2
+# define SIZE_FLAG 0x4
+# define PATTERN_FLAG 0x8
+# define TIMESTAMP_IN_MSG 0x10
 
-# define HANDLED_FLAGS "v"
-# define MSG_MAX_LEN 64
 
 #define ECHO_REQUEST 8
 #define ECHO_REPLY 0
+
+#define DATA_SIZE 65507
+#define ICMP_HDR_SIZE 8
 
 enum e_errorcode {
 	SUCCESS,
@@ -28,6 +32,7 @@ enum e_errorcode {
 	INVALID_ARGUMENT,
 	INVALID_OPTION,
 	RESOLUTION_ERROR,
+	MUST_BE_HEX_ERROR,
 	USAGE,
 };
 
@@ -48,6 +53,8 @@ struct s_env
 	struct icmp4_hdr *hdr;
 	uint64_t flags;
 	size_t count;
+	char *pattern;
+	size_t size;
 };
 
 # endif /* FT_PING_H */

@@ -32,6 +32,12 @@ int option_requires_argument(struct s_env *env, char *option)
 	return INVALID_ARGUMENT;
 }
 
+int must_be_hex(struct s_env *env, char *arg)
+{
+	fprintf(stderr, "%s: patterns must be specified as hex digits:%s\n", env->progname, arg);
+	return MUST_BE_HEX_ERROR;
+}
+
 int parse_count(struct s_env *env, int ac, char **av, int *i)
 {
 	int found = 0;
@@ -104,17 +110,71 @@ int parse_dest(struct s_env *env, char *dest)
 	return SUCCESS;
 }
 
+int parse_size(struct s_env *env, int ac, char **av, int *i)
+{
+	int found = 0;
+	size_t size;
+	char *end;
+
+	env->flags |= SIZE_FLAG;
+	if (av[*i][2] != 0) {							// parse in same arg
+		size = strtoll(&(av[*i][2]), &end, 10);
+		if (*end != 0)
+			return invalid_argument(env, &(av[*i][2]));
+		found = 1;
+	}
+	if (!found) {									// parse next arg as complement
+			if (*i + 1 == ac)
+				return option_requires_argument(env, av[*i]);
+			(*i)++;
+			size = strtoll(av[*i], &end, 10);
+			if (end == av[*i] || *end != 0)
+				return invalid_argument(env, av[*i]);
+	}
+	env->size = size;
+	printf("size = %zu\n", size);
+	return SUCCESS;
+}
+
+int parse_pattern(struct s_env *env, int ac, char **av, int *i)
+{
+	int found = 0;
+	char *pattern;
+
+	env->flags |= PATTERN_FLAG;
+	if (av[*i][2] != 0) {							// parse in same arg
+		pattern = &av[*i][2];
+		if (strlen(pattern) != strspn(pattern, "abcdefABCDEF0123456789"))
+			return must_be_hex(env, pattern);
+		found = 1;
+	}
+	if (!found) {									// parse next arg as complement
+			if (*i + 1 == ac)
+				return option_requires_argument(env, av[*i]);
+			(*i)++;
+			pattern = av[*i];
+			if (strlen(pattern) != strspn(pattern, "abcdefABCDEF0123456789"))
+				return must_be_hex(env, pattern);
+	}
+	env->pattern = pattern;
+	return SUCCESS;
+}
+
 int parse_arg(struct s_env *env, int ac, char **av, int *i)
 {
 	if (*i == ac - 1)
 		return parse_dest(env, av[*i]);
 	if (strncmp(av[*i], "-c", 2) == 0)
 		return parse_count(env, ac, av, i);
-	else if (strcmp(av[*i], "-v") == 0) {
-		env->flags |= VERBOSE_FLAG;
-	}
-	else if (strcmp(av[*i], "-h") == 0) {
+	if (strncmp(av[*i], "-s", 2) == 0)
+		return parse_size(env, ac, av, i);
+	if (strncmp(av[*i], "-p", 2) == 0)
+		return parse_pattern(env, ac, av, i);
+	if (strcmp(av[*i], "-h") == 0) {
 		return usage(env);
+	}
+	if (strcmp(av[*i], "-v") == 0) {
+		env->flags |= VERBOSE_FLAG;
 	}
 	else {
 		return invalid_option(env, av[*i]);
@@ -138,6 +198,8 @@ int args_parsing(struct s_env *env, int ac, char **av)
 			return retval;
 		i++;
 	}
+	if ((env->flags & SIZE_FLAG) == 0)
+		env->size = 56; 
 	return SUCCESS;
 }
 
@@ -155,25 +217,69 @@ int init_env(struct s_env *env)
 	return SUCCESS;
 }
 
-int			fill_header(struct s_env *env, char *buffer, size_t buffsize)
+int	fill_header(struct s_env *env, char *buffer, size_t buffsize)
 {
 	struct icmp4_hdr *hdr = (struct icmp4_hdr *)buffer;
 
 	if (buffsize < sizeof(struct icmp4_hdr))
 		return (0);
-	bzero(hdr, sizeof(*hdr));
 	hdr->msg_type = ECHO_REQUEST;
 	hdr->ident = env->ident;
 	hdr->sequence = 1;
 	return (1);
 }
 
-void			fill_buffer(char *buffer, size_t buffsize)
+void copy_pattern(char *buffer, size_t buffsize, char *pattern)
 {
-	snprintf(buffer, buffsize, "pouet");
+// la conversion est a chier, a refaire
+	size_t i = 0;
+	size_t patternindex = 0;
+	size_t patternlen = strlen(pattern);
+	
+	while (i < buffsize)
+	{
+		if (pattern[patternindex] >= '0' && pattern[patternindex] <= '9') {
+				buffer[i] = pattern[patternindex] - '0';	
+				patternindex++;
+		}
+		else if (pattern[patternindex] >= 'a' && pattern[patternindex] <= 'f') {
+				buffer[i] = pattern[patternindex] - 'a' + 10;	
+				patternindex++;
+		}
+		else {
+				buffer[i] = pattern[patternindex] - 'A' + 10;	
+				patternindex++;
+		}
+		if (patternindex == patternlen)
+			patternindex = 0;
+		i++;
+	}	
 }
 
-int			calculate_checksum(char *buffer, size_t buffsize)
+void fill_buffer(struct s_env *env, char *buffer, size_t buffsize)
+{
+	struct timeval time;
+	unsigned int i = 0;
+	
+	printf("env->size %zu\n", env->size);
+	if (buffsize >= sizeof(struct timeval)) {
+		gettimeofday(&time, NULL);
+		memcpy(buffer, &time, sizeof(time));
+		i += sizeof(time);
+		env->flags |= TIMESTAMP_IN_MSG;	
+	}
+	if (env->pattern == NULL) {
+		while (i < buffsize) {
+			buffer[i] = (i & 0xff);
+			i++;
+		}	
+	}
+	else {
+		copy_pattern(buffer + i, buffsize - i, env->pattern);
+	}
+}
+
+int			compute_checksum(char *buffer, size_t buffsize)
 {
 	struct icmp4_hdr *hdr = (struct icmp4_hdr*)buffer;
 	size_t buffsize_uint16 = buffsize / 2;
@@ -181,12 +287,13 @@ int			calculate_checksum(char *buffer, size_t buffsize)
 	uint32_t checksum = 0;
 	size_t i;
 
+	printf("buffsize %zu\n", buffsize);
 	if (buffsize == 0)
 		return 0;
 	for(i = 0; i < buffsize_uint16; i++)
 		checksum += buf[i];
 	if (buffsize % 2)
-		checksum += (((uint16_t)buffer[buffsize - 1]) << 8);
+		checksum += ((uint16_t)buffer[buffsize - 1]);
 	// folding checksum to get an uint16_t back
 	checksum = (checksum & 0xffff) + (checksum >> 16);
 	hdr->checksum = ~checksum;
@@ -196,7 +303,7 @@ int			calculate_checksum(char *buffer, size_t buffsize)
 int ping(struct s_env *env)
 {
 	int sock;
-	char buffer[MSG_MAX_LEN];
+	char buffer[ICMP_HDR_SIZE + DATA_SIZE];
 	int retval;
 
 // check for CAP_NET_RAW capability in user namespace
@@ -218,9 +325,9 @@ int ping(struct s_env *env)
 		printf("Didn't have enough space for the ICMP header\n");
 		return (0);
 	}
-	fill_buffer(buffer + sizeof(struct icmp4_hdr), sizeof(buffer) - sizeof(struct icmp4_hdr));
-	calculate_checksum(buffer, sizeof(buffer));
-	retval = sendto(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)&env->daddr, sizeof(env->daddr));
+	fill_buffer(env, buffer + ICMP_HDR_SIZE, env->size); // attention pas de verification de la size max au parsing
+	compute_checksum(buffer, ICMP_HDR_SIZE + env->size);
+	retval = sendto(sock, buffer, ICMP_HDR_SIZE + env->size, 0, (struct sockaddr*)&env->daddr, sizeof(env->daddr));
 	if (retval < 0)
 	{
 		printf("error : %s\n", strerror(errno));
