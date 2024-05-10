@@ -125,8 +125,16 @@ int			compute_checksum(char *buffer, size_t buffsize)
 
 int parse_response(struct s_env *env, char *buffer, const struct timeval *time)
 {
-	(void)env;
-	(void)buffer;
+	struct ipv4_hdr *iphdr = (struct ipv4_hdr*)buffer;
+	struct icmp4_hdr *icmp_hdr = (struct icmp4_hdr*)(iphdr + 1);
+	struct timeval *tv = (env->size >= sizeof(struct timeval) ? (struct timeval*)(icmp_hdr + 1) : NULL);
+	char *data = (tv == NULL ? (char*)(icmp_hdr + 1) : (char*)(tv + 1));
+
+	printf("ident = %.4hx, ident received = %.4hx\n", env->ident, icmp_hdr->ident);
+	if (icmp_hdr->ident != env->ident)
+		return INCORRECT_IDENT;
+
+	(void)data;
 	(void)time;
 	return (1);
 }
@@ -139,7 +147,7 @@ int receive_answer(int sock, struct s_env *env, const struct timeval *time)
 	int retval;
 
 	bzero(msg, MSG_SIZE);
-	retval = recvfrom(sock, msg, MSG_SIZE, 0, &addr, &addrlen);
+	retval = recvfrom(sock, msg, MSG_SIZE, MSG_PEEK, &addr, &addrlen);
 	printf("pwet\n");
 	if (retval != -1) {
 		for (int i = 0; i < retval; i++) {
@@ -150,7 +158,8 @@ int receive_answer(int sock, struct s_env *env, const struct timeval *time)
 				printf(" ");
 		}
 				printf("\n");
-		parse_response(env, msg, time);
+		while (parse_response(env, msg, time) == INCORRECT_IDENT);
+
 	}
 	else
 		printf("error when receiving\n");

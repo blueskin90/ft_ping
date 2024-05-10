@@ -19,6 +19,8 @@
 # define PATTERN_FLAG 0x8
 # define TIMESTAMP_IN_MSG 0x10
 
+# define INCORRECT_IDENT 0x20
+
 
 #define ECHO_REQUEST 8
 #define ECHO_REPLY 0
@@ -37,6 +39,25 @@ enum e_errorcode {
 	MUST_BE_HEX_ERROR,
 	SIZE_TOO_BIG,
 	USAGE,
+};
+
+union ipv4_addr {
+	uint32_t addr;
+	char addr_split[4];
+};
+
+struct ipv4_hdr {
+	uint8_t version:4;
+	uint8_t ihl:4;
+	uint8_t tos;
+	uint16_t length;
+	uint16_t ident;
+	uint16_t flags;
+	uint8_t ttl;
+	uint8_t protocol;
+	uint16_t checksum;
+	union ipv4_addr src;
+	union ipv4_addr dest;
 };
 
 struct icmp4_hdr {
