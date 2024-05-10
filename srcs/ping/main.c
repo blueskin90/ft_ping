@@ -52,12 +52,12 @@ int parse_count(struct s_env *env, int ac, char **av, int *i)
 		found = 1;
 	}
 	if (!found) {									// parse next arg as complement
-			if (*i + 1 == ac)
-				return option_requires_argument(env, av[*i]);
-			(*i)++;
-			count = strtoll(av[*i], &end, 10);
-			if (end == av[*i] || *end != 0)
-				return invalid_argument(env, av[*i]);
+		if (*i + 1 == ac)
+			return option_requires_argument(env, av[*i]);
+		(*i)++;
+		count = strtoll(av[*i], &end, 10);
+		if (end == av[*i] || *end != 0)
+			return invalid_argument(env, av[*i]);
 	}
 	env->count = count;
 	return SUCCESS;
@@ -99,7 +99,7 @@ int parse_dest(struct s_env *env, char *dest)
 	retval = getaddrinfo(dest, 0, &hints, &res);
 	printf("AF_INET %d\n", AF_INET);
 	if (retval < 0) {
-		printf("Couldn't resolve host %s: %s\n", dest, gai_strerror(retval));
+		fprintf(stderr, "%s: Couldn't resolve host %s: %s\n", env->progname, dest, gai_strerror(retval));
 		freeaddrinfo(res);
 		return RESOLUTION_ERROR;
 	}
@@ -124,12 +124,16 @@ int parse_size(struct s_env *env, int ac, char **av, int *i)
 		found = 1;
 	}
 	if (!found) {									// parse next arg as complement
-			if (*i + 1 == ac)
-				return option_requires_argument(env, av[*i]);
-			(*i)++;
-			size = strtoll(av[*i], &end, 10);
-			if (end == av[*i] || *end != 0)
-				return invalid_argument(env, av[*i]);
+		if (*i + 1 == ac)
+			return option_requires_argument(env, av[*i]);
+		(*i)++;
+		size = strtoll(av[*i], &end, 10);
+		if (end == av[*i] || *end != 0)
+			return invalid_argument(env, av[*i]);
+	}
+	if (size > 65507) {
+		fprintf(stderr, "%s: Maximum size of ICMP data is 65507 (65535 with IP and ICMP header): %zu (%zu with IP and ICMP header)\n", env->progname, size, size + 28);
+		return SIZE_TOO_BIG;
 	}
 	env->size = size;
 	printf("size = %zu\n", size);
@@ -149,12 +153,12 @@ int parse_pattern(struct s_env *env, int ac, char **av, int *i)
 		found = 1;
 	}
 	if (!found) {									// parse next arg as complement
-			if (*i + 1 == ac)
-				return option_requires_argument(env, av[*i]);
-			(*i)++;
-			pattern = av[*i];
-			if (strlen(pattern) != strspn(pattern, "abcdefABCDEF0123456789"))
-				return must_be_hex(env, pattern);
+		if (*i + 1 == ac)
+			return option_requires_argument(env, av[*i]);
+		(*i)++;
+		pattern = av[*i];
+		if (strlen(pattern) != strspn(pattern, "abcdefABCDEF0123456789"))
+			return must_be_hex(env, pattern);
 	}
 	env->pattern = pattern;
 	return SUCCESS;
@@ -199,7 +203,7 @@ int args_parsing(struct s_env *env, int ac, char **av)
 		i++;
 	}
 	if ((env->flags & SIZE_FLAG) == 0)
-		env->size = 56; 
+		env->size = 56;
 	return SUCCESS;
 }
 
@@ -229,50 +233,71 @@ int	fill_header(struct s_env *env, char *buffer, size_t buffsize)
 	return (1);
 }
 
+void copy_mono_pattern(char *buffer, size_t buffsize, char pattern)
+{
+	char full_pattern;
+	size_t i = 0;
+
+	if (pattern >= '0' && pattern <= '9')
+		full_pattern = pattern - '0';
+	else if (pattern >= 'a' && pattern <= 'f')
+		full_pattern = pattern - 'a' + 10;
+	else if (pattern >= 'A' && pattern <= 'F')
+		full_pattern = pattern - 'A' + 10;
+	while (i < buffsize)
+		buffer[i++] = full_pattern;
+}
+
 void copy_pattern(char *buffer, size_t buffsize, char *pattern)
 {
-// la conversion est a chier, a refaire
 	size_t i = 0;
 	size_t patternindex = 0;
 	size_t patternlen = strlen(pattern);
-	
-	while (i < buffsize)
-	{
-		if (pattern[patternindex] >= '0' && pattern[patternindex] <= '9') {
-				buffer[i] = pattern[patternindex] - '0';	
+
+	if (patternlen == 1)
+		copy_mono_pattern(buffer, buffsize, *pattern);
+	else {
+		while (i < buffsize)
+		{
+			if (pattern[patternindex] >= '0' && pattern[patternindex] <= '9') {
+				buffer[i] |= (pattern[patternindex] - '0') << (patternindex % 2 ? 0 : 4);
 				patternindex++;
-		}
-		else if (pattern[patternindex] >= 'a' && pattern[patternindex] <= 'f') {
-				buffer[i] = pattern[patternindex] - 'a' + 10;	
+			}
+			else if (pattern[patternindex] >= 'a' && pattern[patternindex] <= 'f') {
+				buffer[i] |= (pattern[patternindex] - 'a' + 10) << (patternindex % 2 ? 0 : 4);
 				patternindex++;
-		}
-		else {
-				buffer[i] = pattern[patternindex] - 'A' + 10;	
+			}
+			else if (pattern[patternindex] >= 'A' && pattern[patternindex] <= 'F') {
+				buffer[i] |= (pattern[patternindex] - 'A' + 10) << (patternindex % 2 ? 0 : 4);
 				patternindex++;
+			}
+			else {
+				patternindex++;
+			}
+			if ((i != 0 && patternindex % 2 == 0) || (i == 0 && patternindex == 2))
+				i++;
+			if (patternindex > patternlen)
+				patternindex = 0;
 		}
-		if (patternindex == patternlen)
-			patternindex = 0;
-		i++;
-	}	
+	}
 }
 
 void fill_buffer(struct s_env *env, char *buffer, size_t buffsize)
 {
 	struct timeval time;
 	unsigned int i = 0;
-	
-	printf("env->size %zu\n", env->size);
+
 	if (buffsize >= sizeof(struct timeval)) {
 		gettimeofday(&time, NULL);
 		memcpy(buffer, &time, sizeof(time));
 		i += sizeof(time);
-		env->flags |= TIMESTAMP_IN_MSG;	
+		env->flags |= TIMESTAMP_IN_MSG;
 	}
 	if (env->pattern == NULL) {
 		while (i < buffsize) {
 			buffer[i] = (i & 0xff);
 			i++;
-		}	
+		}
 	}
 	else {
 		copy_pattern(buffer + i, buffsize - i, env->pattern);
@@ -287,7 +312,6 @@ int			compute_checksum(char *buffer, size_t buffsize)
 	uint32_t checksum = 0;
 	size_t i;
 
-	printf("buffsize %zu\n", buffsize);
 	if (buffsize == 0)
 		return 0;
 	for(i = 0; i < buffsize_uint16; i++)
@@ -300,13 +324,35 @@ int			compute_checksum(char *buffer, size_t buffsize)
 	return 1;
 }
 
+int receive_answer(int sock, struct s_env *env)
+{
+	char msg[MSG_SIZE];
+	int retval;
+	struct sockaddr addr;
+	socklen_t addrlen;
+
+	(void)env;
+	bzero(msg, MSG_SIZE);
+	retval = recvfrom(sock, msg, MSG_SIZE, 0, &addr, &addrlen);
+	printf("reval = %d\n",retval);
+	if (retval != -1) {
+		for (int i = 0; i < retval; i++) {
+			printf("%.2hhx", msg[i]);
+			if (i % 2 == 0 && i != 0)
+				printf(" ");
+			if (i % 16 == 0 && i != 0)
+				printf("\n");
+		}
+	}
+	return SUCCESS;
+}
+
 int ping(struct s_env *env)
 {
 	int sock;
 	char buffer[ICMP_HDR_SIZE + DATA_SIZE];
 	int retval;
 
-// check for CAP_NET_RAW capability in user namespace
 	sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if (sock < 0)
 	{
@@ -333,6 +379,7 @@ int ping(struct s_env *env)
 		printf("error : %s\n", strerror(errno));
 		return (0);
 	}
+	receive_answer(sock, env);
 	return SUCCESS;
 }
 

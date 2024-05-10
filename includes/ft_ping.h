@@ -23,7 +23,9 @@
 #define ECHO_REQUEST 8
 #define ECHO_REPLY 0
 
+#define MSG_SIZE 65507 + IPV4_HDR_SIZE + ICMP_HDR_SIZE
 #define DATA_SIZE 65507
+#define IPV4_HDR_SIZE 20
 #define ICMP_HDR_SIZE 8
 
 enum e_errorcode {
@@ -33,6 +35,7 @@ enum e_errorcode {
 	INVALID_OPTION,
 	RESOLUTION_ERROR,
 	MUST_BE_HEX_ERROR,
+	SIZE_TOO_BIG,
 	USAGE,
 };
 
