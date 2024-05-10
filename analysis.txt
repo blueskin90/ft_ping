@@ -59,7 +59,7 @@ REQ
 REPLY
 
 0800 2702 4f06 / 5254 0012 3502 / 0800 / 4/5/00	 	SMAC / DMAC / ethtype / (start of ip protocol) version / ihl / TOS
-0054 / 2d06 / 4000 / 3f/01/ f284/ 0808 0808/ 0a00 	Total length / identification / flags-fragmentoffset/ttl/protocol/??/ip source / start ip dest
+0054 / 2d06 / 4000 / 3f/01/ f284/ 0808 0808/ 0a00 	Total length / identification / flags-fragmentoffset/ttl/protocol/checksum/ip source / start ip dest
 020f / 00/ 00 / bde7/ 4593 / 0001 / 4975 3266 0000 	end ip dest (end of ip protocol)/(icmp protocol)message-type (icmp reply)/code/ checksum / identifier / seq number / time 64 bit float
 0000 / bed5 0300 0000 0000 1011 1213 1415 		end of time 64 bit float
 1617 1819 1a1b 1c1d 1e1f 2021 2223 2425 
@@ -85,3 +85,19 @@ root@debian:/home/user/projets/ft_ping# 06:40:22.851708 enp0s3 Out ifindex 2 08:
 	0x00a0:  0000 0000                                ....
 
 should start writing from msg_type (icmp_reply) in the buffer
+
+
+myreply :
+
+4/5/00 /0054/ efc3/ 4000 /3f/01/ 2fc7 /0808 0808/		version / ihl / TOS / length / identification/ flags-fragmentoffset/TTL/protocol/ hdr chksm / ip src
+0a00 020f/ 00/ 00 /5bfa /0e88 / 0100 / de7e 3e			ip dest / message type / code / checksum /identifier/seq number / start of 64 bit time
+66 0000 0000 b6c5 0200 0000 0000 /1011				end of 64 bit time / data
+1213 1415 1617 1819 1a1b 1c1d 1e1f 20
+21 2223 2425 2627 2829 2a2b 2c2d 2e2f
+3031 3233 3435 3637 
+
+output:
+--- 8.8.8.8 ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 1.855/1.855/1.855/0.000 ms
+

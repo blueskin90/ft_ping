@@ -13,15 +13,15 @@
 
 NAME = ft_ping
 
-INCLUDES = -I includes\
-		   -I ./libs/libft/includes\
-		   -I ./libs/ftprintf/includes
+INCLUDES = -I includes
 
 FLAGS = -Wall -Wextra -Werror -g3
 
 OBJS = $(addprefix objs/, $(addsuffix .o, \
 			$(addprefix ping/, \
 				main \
+				parsing \
+				error \
 				) \
 		)) 
 

@@ -58,6 +58,15 @@ struct s_env
 	size_t count;
 	char *pattern;
 	size_t size;
+	size_t seq;
 };
+
+int args_parsing(struct s_env *env, int ac, char **av);
+
+int usage(struct s_env *env);
+int invalid_option(struct s_env *env, char *arg);
+int invalid_argument(struct s_env *env, char *arg);
+int option_requires_argument(struct s_env *env, char *option);
+int must_be_hex(struct s_env *env, char *arg);
 
 # endif /* FT_PING_H */
