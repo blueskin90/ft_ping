@@ -71,6 +71,8 @@ struct icmp4_hdr {
 struct s_env
 {
 	char *progname;
+	char *dest;
+	char dest_ip[16];
 	uint16_t ident;
 	struct sockaddr_in saddr;
 	struct sockaddr_in daddr;

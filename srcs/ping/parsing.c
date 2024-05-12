@@ -53,23 +53,35 @@ static void dump_res(struct addrinfo *res)
 }
 */
 
+static void parse_dest_ip(struct s_env *env, struct sockaddr_in* addr)
+{
+	uint8_t val;
+	int offset = 0;
+
+	for (int i = 0; i < 4; i++) {
+		val = (addr->sin_addr.s_addr & (0xFF << (8 * i))) >> (8 * i);
+		offset += sprintf(env->dest_ip + offset, "%d%c",val, i == 3 ? 0 : '.');
+	}
+}
+
 static int parse_dest(struct s_env *env, char *dest)
 {
 	struct addrinfo hints;
 	struct addrinfo *res;
 	int retval;
 
+	env->dest = dest;
 	bzero(&hints, sizeof(hints));
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_RAW;
 	hints.ai_protocol = IPPROTO_ICMP;
 	retval = getaddrinfo(dest, 0, &hints, &res);
-	printf("AF_INET %d\n", AF_INET);
 	if (retval < 0) {
 		fprintf(stderr, "%s: Couldn't resolve host %s: %s\n", env->progname, dest, gai_strerror(retval));
 		freeaddrinfo(res);
 		return RESOLUTION_ERROR;
 	}
+	parse_dest_ip(env, (struct sockaddr_in *)res->ai_addr);
 	env->daddr.sin_family = AF_INET;
 	env->daddr.sin_port = 0;
 	memcpy(&env->daddr.sin_addr, &((struct sockaddr_in*)res->ai_addr)->sin_addr, sizeof(env->daddr.sin_addr));

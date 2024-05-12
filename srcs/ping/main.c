@@ -147,23 +147,29 @@ int receive_answer(int sock, struct s_env *env, const struct timeval *time)
 	int retval;
 
 	bzero(msg, MSG_SIZE);
-	retval = recvfrom(sock, msg, MSG_SIZE, MSG_PEEK, &addr, &addrlen);
-	printf("pwet\n");
-	if (retval != -1) {
-		for (int i = 0; i < retval; i++) {
-			printf("%.2hhx", msg[i]);
-			if (i % 15 == 0 && i != 0)
-				printf("\n");
-			else if (i % 2 == 1)
-				printf(" ");
-		}
-				printf("\n");
-		while (parse_response(env, msg, time) == INCORRECT_IDENT);
+	do {
+		retval = recvfrom(sock, msg, MSG_SIZE, MSG_PEEK, &addr, &addrlen);
+		if (retval != -1) {
+			for (int i = 0; i < retval; i++) {
+				printf("%.2hhx", msg[i]);
+				if (i % 15 == 0 && i != 0)
+					printf("\n");
+				else if (i % 2 == 1)
+					printf(" ");
+			}
+					printf("\n");
+	} while (parse_response(env, msg, time) == INCORRECT_IDENT);
 
 	}
 	else
 		printf("error when receiving\n");
 	return SUCCESS;
+}
+
+int print_first_line(struct s_env *env)
+{
+	printf("PING %s (%s) %ld(%ld) bytes of data.\n", env->dest, env->dest_ip, env->size, env->size + IPV4_HDR_SIZE + ICMP_HDR_SIZE);
+	return 1;
 }
 
 int ping(struct s_env *env)
@@ -190,6 +196,7 @@ int ping(struct s_env *env)
 		printf("Didn't have enough space for the ICMP header\n");
 		return (0);
 	}
+	print_first_line(env);	
 	fill_buffer(env, buffer + ICMP_HDR_SIZE, env->size);
 	compute_checksum(buffer, ICMP_HDR_SIZE + env->size);
 	retval = sendto(sock, buffer, ICMP_HDR_SIZE + env->size, 0, (struct sockaddr*)&env->daddr, sizeof(env->daddr));
