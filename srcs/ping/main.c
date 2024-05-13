@@ -90,16 +90,16 @@ void fill_buffer(struct s_env *env, char *buffer, size_t buffsize)
 		gettimeofday(&time, NULL);
 		memcpy(buffer, &time, sizeof(time));
 		i += sizeof(time);
-		env->flags |= TIMESTAMP_IN_MSG;
+		env->args.flags |= TIMESTAMP_IN_MSG;
 	}
-	if (env->pattern == NULL) {
+	if (env->args.pattern == NULL) {
 		while (i < buffsize) {
 			buffer[i] = (i & 0xff);
 			i++;
 		}
 	}
 	else {
-		copy_pattern(buffer + i, buffsize - i, env->pattern);
+		copy_pattern(buffer + i, buffsize - i, env->args.pattern);
 	}
 }
 
@@ -127,7 +127,7 @@ int parse_response(struct s_env *env, char *buffer, const struct timeval *time)
 {
 	struct ipv4_hdr *iphdr = (struct ipv4_hdr*)buffer;
 	struct icmp4_hdr *icmp_hdr = (struct icmp4_hdr*)(iphdr + 1);
-	struct timeval *tv = (env->size >= sizeof(struct timeval) ? (struct timeval*)(icmp_hdr + 1) : NULL);
+	struct timeval *tv = (env->args.size >= sizeof(struct timeval) ? (struct timeval*)(icmp_hdr + 1) : NULL);
 	char *data = (tv == NULL ? (char*)(icmp_hdr + 1) : (char*)(tv + 1));
 
 	printf("ident = %.4hx, ident received = %.4hx\n", env->ident, icmp_hdr->ident);
@@ -157,19 +157,79 @@ int receive_answer(int sock, struct s_env *env, const struct timeval *time)
 				else if (i % 2 == 1)
 					printf(" ");
 			}
+			env->received++;
+		}
+		else {
+			printf("error when receiving\n");
+			env->error_received++;
+			break;
+		}
+
 					printf("\n");
 	} while (parse_response(env, msg, time) == INCORRECT_IDENT);
-
-	}
-	else
-		printf("error when receiving\n");
-	return SUCCESS;
+		return SUCCESS;
 }
 
 int print_first_line(struct s_env *env)
 {
-	printf("PING %s (%s) %ld(%ld) bytes of data.\n", env->dest, env->dest_ip, env->size, env->size + IPV4_HDR_SIZE + ICMP_HDR_SIZE);
+	printf("PING %s (%s) %ld(%ld) bytes of data.\n", env->args.dest, env->dest_ip, env->args.size, env->args.size + IPV4_HDR_SIZE + ICMP_HDR_SIZE);
 	return 1;
+}
+
+int fill_message(struct s_env *env, char *buffer, size_t bufsize)
+{
+	bzero(buffer, bufsize);
+	if (!fill_header(env, buffer,bufsize))
+	{
+		printf("Didn't have enough space for the ICMP header\n");
+		return (0);
+	}
+	fill_buffer(env, buffer + ICMP_HDR_SIZE, env->args.size);
+	compute_checksum(buffer, ICMP_HDR_SIZE + env->args.size);
+	return (SUCCESS);
+}
+
+int running = 1;
+
+void intHandler(int dummy)
+{
+	(void)dummy;
+	running = 0;
+}
+
+void fill_modifications(struct s_env *env, char *buffer)
+{
+	struct icmp4_hdr *msg = (struct icmp4_hdr*)buffer;
+
+	msg->sequence = env->seq;
+	bzero(&msg->checksum, sizeof(msg->checksum));
+	if (env->args.flags & TIMESTAMP_IN_MSG)
+		gettimeofday(&msg->time, NULL);
+	compute_checksum(buffer, ICMP_HDR_SIZE + env->args.size);
+}
+
+void send_message(struct s_env *env, int sock, char *buffer)
+{
+	int retval;
+
+	retval = sendto(sock, buffer, ICMP_HDR_SIZE + env->args.size, 0, (struct sockaddr*)&env->daddr, sizeof(env->daddr));
+	if (retval < 0)
+	{
+		printf("error : %s\n", strerror(errno));
+		env->error_transmitted++;
+		return;
+	}
+	env->transmitted++;
+}
+
+void print_end_stats(struct s_env *env)
+{
+	struct timeval time_end;
+
+	gettimeofday(&time_end, NULL);
+	printf("--- %s ping statistics ---\n", env->args.dest);
+	printf("%zu packets transmitted, %zu received, %ld%% packet loss, time (HERE SHOULD PRINT THE TIME PING HAS BEEN RUNNING)\n", env->transmitted, env->received, env->received == 0 ? (env->transmitted == 0 ? 0 : 100) : 100 - env->received * 100 / env->transmitted);
+	printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", 1.921394, 1.124215, 12.213, 0.);
 }
 
 int ping(struct s_env *env)
@@ -190,22 +250,20 @@ int ping(struct s_env *env)
 		printf("error : %s\n", strerror(errno));
 		return (0);
 	}
-	bzero(buffer, sizeof(buffer));
-	if (!fill_header(env, buffer,sizeof(buffer)))
-	{
-		printf("Didn't have enough space for the ICMP header\n");
-		return (0);
+	fill_message(env, buffer,sizeof(buffer));
+	print_first_line(env);
+	signal(SIGINT, intHandler);
+	gettimeofday(&env->start_time, NULL);
+	while (running) {
+		fill_modifications(env, buffer);
+		send_message(env, sock, buffer);
+		receive_answer(sock, env, (env->args.size >= sizeof(struct timeval) ? (struct timeval *)(buffer + ICMP_HDR_SIZE) : NULL));
+		env->seq++;	
+		if ((env->args.flags & COUNT_FLAG) && env->seq > env->args.count) 
+			running = 0;
+		sleep(1);
 	}
-	print_first_line(env);	
-	fill_buffer(env, buffer + ICMP_HDR_SIZE, env->size);
-	compute_checksum(buffer, ICMP_HDR_SIZE + env->size);
-	retval = sendto(sock, buffer, ICMP_HDR_SIZE + env->size, 0, (struct sockaddr*)&env->daddr, sizeof(env->daddr));
-	if (retval < 0)
-	{
-		printf("error : %s\n", strerror(errno));
-		return (0);
-	}
-	receive_answer(sock, env, (env->size >= sizeof(struct timeval) ? (struct timeval *)(buffer + ICMP_HDR_SIZE) : NULL));
+	print_end_stats(env);
 	return SUCCESS;
 }
 

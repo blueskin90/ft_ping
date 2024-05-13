@@ -9,7 +9,7 @@ static int parse_count(struct s_env *env, int ac, char **av, int *i)
 	size_t count;
 	char *end;
 
-	env->flags |= COUNT_FLAG;
+	env->args.flags |= COUNT_FLAG;
 	if (av[*i][2] != 0) {							// parse in same arg
 		count = strtoll(&(av[*i][2]), &end, 10);
 		if (*end != 0)
@@ -24,7 +24,7 @@ static int parse_count(struct s_env *env, int ac, char **av, int *i)
 		if (end == av[*i] || *end != 0)
 			return invalid_argument(env, av[*i]);
 	}
-	env->count = count;
+	env->args.count = count;
 	return SUCCESS;
 }
 
@@ -70,7 +70,7 @@ static int parse_dest(struct s_env *env, char *dest)
 	struct addrinfo *res;
 	int retval;
 
-	env->dest = dest;
+	env->args.dest = dest;
 	bzero(&hints, sizeof(hints));
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_RAW;
@@ -95,7 +95,7 @@ static int parse_size(struct s_env *env, int ac, char **av, int *i)
 	size_t size;
 	char *end;
 
-	env->flags |= SIZE_FLAG;
+	env->args.flags |= SIZE_FLAG;
 	if (av[*i][2] != 0) {							// parse in same arg
 		size = strtoll(&(av[*i][2]), &end, 10);
 		if (*end != 0)
@@ -112,9 +112,9 @@ static int parse_size(struct s_env *env, int ac, char **av, int *i)
 	}
 	if (size > 65507) {
 		fprintf(stderr, "%s: Maximum size of ICMP data is 65507 (65535 with IP and ICMP header): %zu (%zu with IP and ICMP header)\n", env->progname, size, size + 28);
-		return SIZE_TOO_BIG;
+		return SIZE_TOO_BIG; // real one doesnt do this, it just wait forever
 	}
-	env->size = size;
+	env->args.size = size;
 	printf("size = %zu\n", size);
 	return SUCCESS;
 }
@@ -124,7 +124,7 @@ static int parse_pattern(struct s_env *env, int ac, char **av, int *i)
 	int found = 0;
 	char *pattern;
 
-	env->flags |= PATTERN_FLAG;
+	env->args.flags |= PATTERN_FLAG;
 	if (av[*i][2] != 0) {							// parse in same arg
 		pattern = &av[*i][2];
 		if (strlen(pattern) != strspn(pattern, "abcdefABCDEF0123456789"))
@@ -139,7 +139,7 @@ static int parse_pattern(struct s_env *env, int ac, char **av, int *i)
 		if (strlen(pattern) != strspn(pattern, "abcdefABCDEF0123456789"))
 			return must_be_hex(env, pattern);
 	}
-	env->pattern = pattern;
+	env->args.pattern = pattern;
 	return SUCCESS;
 }
 
@@ -157,7 +157,7 @@ static int parse_arg(struct s_env *env, int ac, char **av, int *i)
 		return usage(env);
 	}
 	if (strcmp(av[*i], "-v") == 0) {
-		env->flags |= VERBOSE_FLAG;
+		env->args.flags |= VERBOSE_FLAG;
 	}
 	else {
 		return invalid_option(env, av[*i]);
@@ -181,7 +181,7 @@ int args_parsing(struct s_env *env, int ac, char **av)
 			return retval;
 		i++;
 	}
-	if ((env->flags & SIZE_FLAG) == 0)
-		env->size = 56;
+	if ((env->args.flags & SIZE_FLAG) == 0)
+		env->args.size = 56;
 	return SUCCESS;
 }

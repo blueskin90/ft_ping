@@ -31,6 +31,7 @@
 #define ICMP_HDR_SIZE 8
 
 enum e_errorcode {
+	ERROR,
 	SUCCESS,
 	PARSING_ERROR,
 	INVALID_ARGUMENT,
@@ -60,28 +61,49 @@ struct ipv4_hdr {
 	union ipv4_addr dest;
 };
 
+struct icmp4_hdr_notime {
+	uint8_t	msg_type;
+	uint8_t	code;
+	uint16_t checksum;
+	uint16_t ident;
+	uint16_t sequence;
+	char data[];
+};
+
 struct icmp4_hdr {
 	uint8_t	msg_type;
 	uint8_t	code;
 	uint16_t checksum;
 	uint16_t ident;
 	uint16_t sequence;
+	struct timeval time;
+	char data[];
+};
+
+struct s_args {
+	uint64_t flags;
+	size_t count;
+	char *pattern;
+	size_t size;
+	char *dest;
 };
 
 struct s_env
 {
+	struct timeval start_time;
 	char *progname;
-	char *dest;
 	char dest_ip[16];
 	uint16_t ident;
 	struct sockaddr_in saddr;
 	struct sockaddr_in daddr;
 	struct icmp4_hdr *hdr;
-	uint64_t flags;
-	size_t count;
-	char *pattern;
-	size_t size;
+	struct s_args args;
 	size_t seq;
+	size_t transmitted;
+	size_t error_transmitted;
+	size_t received;
+	size_t error_received;
+	
 };
 
 int args_parsing(struct s_env *env, int ac, char **av);
