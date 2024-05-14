@@ -39,6 +39,7 @@ enum e_errorcode {
 	RESOLUTION_ERROR,
 	MUST_BE_HEX_ERROR,
 	SIZE_TOO_BIG,
+	INCORRECT_CHECKSUM,
 	USAGE,
 };
 
@@ -103,7 +104,10 @@ struct s_env
 	size_t error_transmitted;
 	size_t received;
 	size_t error_received;
-	
+	struct timeval min;	
+	struct timeval avg;	
+	struct timeval max;	
+	struct timeval mdev;	
 };
 
 int args_parsing(struct s_env *env, int ac, char **av);

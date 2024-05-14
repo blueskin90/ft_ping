@@ -123,15 +123,36 @@ int			compute_checksum(char *buffer, size_t buffsize)
 	return 1;
 }
 
+int verify_checksum(char* buffer, size_t buffsize)
+{
+	size_t buffsize_uint16 = buffsize / 2;
+	uint16_t *buf = (uint16_t*)buffer;
+	uint32_t checksum = 0;
+	size_t i;
+
+	if (buffsize == 0)
+		return 0;
+	for(i = 0; i < buffsize_uint16; i++)
+		checksum += buf[i];
+	if (buffsize % 2)
+		checksum += ((uint16_t)buffer[buffsize - 1]);
+	checksum = (checksum & 0xffff) + (checksum >> 16);
+	return (checksum == 0xffff);
+}
+
 int parse_response(struct s_env *env, char *buffer, const struct timeval *time)
 {
 	struct ipv4_hdr *iphdr = (struct ipv4_hdr*)buffer;
-	struct icmp4_hdr *icmp_hdr = (struct icmp4_hdr*)(iphdr + 1);
-	struct timeval *tv = (env->args.size >= sizeof(struct timeval) ? (struct timeval*)(icmp_hdr + 1) : NULL);
-	char *data = (tv == NULL ? (char*)(icmp_hdr + 1) : (char*)(tv + 1));
+	struct icmp4_hdr *icmphdr = (struct icmp4_hdr*)(iphdr + 1);
+	struct timeval *tv = (env->args.size >= sizeof(struct timeval) ? (struct timeval*)(icmphdr + 1) : NULL);
+	char *data = (tv == NULL ? (char*)(icmphdr + 1) : (char*)(tv + 1));
 
-	printf("ident = %.4hx, ident received = %.4hx\n", env->ident, icmp_hdr->ident);
-	if (icmp_hdr->ident != env->ident)
+	printf("ident = %.4hx, ident received = %.4hx\n", env->ident, icmphdr->ident);
+	if (!verify_checksum((char*)icmphdr, ICMP_HDR_SIZE + env->args.size)) {
+		printf("incorrect checksum\n");
+		return INCORRECT_CHECKSUM;
+	}
+	if (icmphdr->ident != env->ident)
 		return INCORRECT_IDENT;
 
 	(void)data;
@@ -204,7 +225,7 @@ void fill_modifications(struct s_env *env, char *buffer)
 	msg->sequence = env->seq;
 	bzero(&msg->checksum, sizeof(msg->checksum));
 	if (env->args.flags & TIMESTAMP_IN_MSG)
-		gettimeofday(&msg->time, NULL);
+		gettimeofday(&msg->time, NULL); // we do this last so its closer to reality
 	compute_checksum(buffer, ICMP_HDR_SIZE + env->args.size);
 }
 
