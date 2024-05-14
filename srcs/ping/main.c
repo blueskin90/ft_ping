@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <limits.h>
 
 int init_env(struct s_env *env)
 {
@@ -17,6 +18,8 @@ int init_env(struct s_env *env)
 		printf("source IP configuration failed\n");
 		return (0);
 	}
+	env->min.tv_sec = LONG_MAX;
+	env->min.tv_usec = LONG_MAX;
 	return SUCCESS;
 }
 
@@ -144,9 +147,10 @@ int parse_response(struct s_env *env, char *buffer, const struct timeval *time)
 {
 	struct ipv4_hdr *iphdr = (struct ipv4_hdr*)buffer;
 	struct icmp4_hdr *icmphdr = (struct icmp4_hdr*)(iphdr + 1);
-	struct timeval *tv = (env->args.size >= sizeof(struct timeval) ? (struct timeval*)(icmphdr + 1) : NULL);
-	char *data = (tv == NULL ? (char*)(icmphdr + 1) : (char*)(tv + 1));
+	struct timeval tv;
+	char *data = (time == NULL ? (char*)(icmphdr + 1) : ((char*)(icmphdr + 1)) + sizeof(struct timeval));
 
+	gettimeofday(&tv, NULL);
 	printf("ident = %.4hx, ident received = %.4hx\n", env->ident, icmphdr->ident);
 	if (!verify_checksum((char*)icmphdr, ICMP_HDR_SIZE + env->args.size)) {
 		printf("incorrect checksum\n");
@@ -155,8 +159,24 @@ int parse_response(struct s_env *env, char *buffer, const struct timeval *time)
 	if (icmphdr->ident != env->ident)
 		return INCORRECT_IDENT;
 
+	if (time) {
+		struct timeval final;
+		
+		final.tv_sec = tv.tv_sec - time->tv_sec;	
+		final.tv_usec = tv.tv_usec - time->tv_usec;	
+
+		printf("there is a time\n");
+		if (final.tv_sec > env->max.tv_sec || ((final.tv_sec == env->max.tv_sec && final.tv_usec > env->max.tv_usec))) {
+			printf("> THAN\n");
+			memcpy(&final, &(env->max), sizeof(struct timeval));
+		}
+		else if (final.tv_sec < env->min.tv_sec || ((final.tv_sec == env->min.tv_sec && final.tv_usec < env->min.tv_usec))) {
+			printf("< THAN\n");
+			memcpy(&final, &(env->min), sizeof(struct timeval));
+		}
+
+	}
 	(void)data;
-	(void)time;
 	return (1);
 }
 
@@ -185,8 +205,7 @@ int receive_answer(int sock, struct s_env *env, const struct timeval *time)
 			env->error_received++;
 			break;
 		}
-
-					printf("\n");
+		printf("\n");
 	} while (parse_response(env, msg, time) == INCORRECT_IDENT);
 		return SUCCESS;
 }
@@ -251,6 +270,8 @@ void print_end_stats(struct s_env *env)
 	printf("--- %s ping statistics ---\n", env->args.dest);
 	printf("%zu packets transmitted, %zu received, %ld%% packet loss, time (HERE SHOULD PRINT THE TIME PING HAS BEEN RUNNING)\n", env->transmitted, env->received, env->received == 0 ? (env->transmitted == 0 ? 0 : 100) : 100 - env->received * 100 / env->transmitted);
 	printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", 1.921394, 1.124215, 12.213, 0.);
+	printf("max %ld,%ld\n", env->max.tv_sec, env->max.tv_usec);
+	printf("min %ld,%ld\n", env->min.tv_sec, env->min.tv_usec);
 }
 
 int ping(struct s_env *env)
