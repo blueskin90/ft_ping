@@ -174,7 +174,6 @@ int parse_response(struct s_env *env, char *buffer, int buffersize, struct timev
 	char *data = (send_time == NULL ? (char*)(icmphdr + 1) : ((char*)(icmphdr + 1)) + sizeof(struct timeval));
 
 	gettimeofday(&recv_time, NULL);
-	printf("ident = %.4hx, ident received = %.4hx\n", env->ident, icmphdr->ident);
 	if (icmphdr->ident != env->ident)
 		return INCORRECT_IDENT;
 	if (!verify_checksum((char*)icmphdr, ICMP_HDR_SIZE + env->args.size)) {
@@ -193,20 +192,16 @@ int parse_response(struct s_env *env, char *buffer, int buffersize, struct timev
 			printf("Impossible, message arrived before it was sent, and we are not doing quantum ping\n");
 			return QUANTUM_PING;
 		}
-		printf("%ld secs %ld usecs\n", final.tv_sec, final.tv_usec);
-		printf("there is a time\n");
 		if (final.tv_sec > env->max.tv_sec || ((final.tv_sec == env->max.tv_sec && final.tv_usec > env->max.tv_usec))) {
-			printf("> THAN\n");
 			memcpy(&(env->max), &final, sizeof(struct timeval));
 		}
 		else if (final.tv_sec < env->min.tv_sec || ((final.tv_sec == env->min.tv_sec && final.tv_usec < env->min.tv_usec))) {
-			printf("< THAN\n");
 			memcpy(&(env->min), &final, sizeof(struct timeval));
 		}
-		printf("%d bytes from "IPV4_FORMAT": icmp_seq=%hd ttl=%hhd time=%.2f ms\n", buffersize, IPV4_ARGUMENTS(iphdr->src), icmphdr->sequence, iphdr->ttl, (float)final.tv_sec * 1000 + (float)final.tv_usec / 1000);
+		printf("%d bytes from "IPV4_FORMAT": icmp_seq=%hd ttl=%hhd time=%.2f ms\n", buffersize - IPV4_HDR_SIZE, IPV4_ARGUMENTS(iphdr->src), icmphdr->sequence, iphdr->ttl, (float)final.tv_sec * 1000 + (float)final.tv_usec / 1000);
 		return (1);
 	}
-	printf("%d bytes from "IPV4_FORMAT": icmp_seq=%hd ttl=%hhd\n", buffersize, IPV4_ARGUMENTS(iphdr->src), icmphdr->sequence, iphdr->ttl);
+	printf("%d bytes from "IPV4_FORMAT": icmp_seq=%hd ttl=%hhd\n", buffersize - IPV4_HDR_SIZE, IPV4_ARGUMENTS(iphdr->src), icmphdr->sequence, iphdr->ttl);
 	(void)data;
 	return (1);
 }
@@ -222,6 +217,7 @@ int receive_answer(int sock, struct s_env *env, struct timeval *time)
 	do {
 		retval = recvfrom(sock, msg, MSG_SIZE, MSG_PEEK, &addr, &addrlen);
 		if (retval != -1) {
+	/*
 			for (int i = 0; i < retval; i++) {
 				printf("%.2hhx", msg[i]);
 				if (i % 15 == 0 && i != 0)
@@ -229,6 +225,7 @@ int receive_answer(int sock, struct s_env *env, struct timeval *time)
 				else if (i % 2 == 1)
 					printf(" ");
 			}
+	*/
 			env->received++;
 		}
 		else {
@@ -236,8 +233,8 @@ int receive_answer(int sock, struct s_env *env, struct timeval *time)
 			env->error_received++;
 			break;
 		}
-		printf("\n");
 	} while (parse_response(env, msg, retval, time) == INCORRECT_IDENT);
+	recvfrom(sock, msg, MSG_SIZE, 0, &addr, &addrlen);
 		return SUCCESS;
 }
 
@@ -302,9 +299,8 @@ void print_end_stats(struct s_env *env)
 	substract_timeval(&total_time, &end_time, &env->start_time);
 	printf("--- %s ping statistics ---\n", env->args.dest);
 	printf("%zu packets transmitted, %zu received, %ld%% packet loss, time %ldms\n", env->transmitted, env->received, env->received == 0 ? (env->transmitted == 0 ? 0 : 100) : 100 - env->received * 100 / env->transmitted, total_time.tv_sec * 1000 + total_time.tv_usec / 1000);
-	printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", (float)env->min.tv_sec * 1000 + (float)env->min.tv_usec / 1000, (float)env->avg.tv_sec * 1000 + (float)env->avg.tv_usec / 1000, (float)env->max.tv_sec * 1000 + (float)env->max.tv_usec / 1000 , 0.);
-	printf("max %ld,%ld\n", env->max.tv_sec, env->max.tv_usec);
-	printf("min %ld,%ld\n", env->min.tv_sec, env->min.tv_usec);
+	if (env->args.flags & TIMESTAMP_IN_MSG)
+		printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", (float)env->min.tv_sec * 1000 + (float)env->min.tv_usec / 1000, (float)env->avg.tv_sec * 1000 + (float)env->avg.tv_usec / 1000, (float)env->max.tv_sec * 1000 + (float)env->max.tv_usec / 1000 , 0.);
 }
 
 int ping(struct s_env *env)
