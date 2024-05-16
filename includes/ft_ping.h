@@ -30,6 +30,10 @@
 #define IPV4_HDR_SIZE 20
 #define ICMP_HDR_SIZE 8
 
+#define IPV4_FORMAT "%hhd.%hhd.%hhd.%hhd"
+
+#define IPV4_ARGUMENTS(x) x.addr_split[0], x.addr_split[1], x.addr_split[2], x.addr_split[3]
+
 enum e_errorcode {
 	ERROR,
 	SUCCESS,
@@ -40,6 +44,8 @@ enum e_errorcode {
 	MUST_BE_HEX_ERROR,
 	SIZE_TOO_BIG,
 	INCORRECT_CHECKSUM,
+	INCORRECT_SIZE,
+	QUANTUM_PING,
 	USAGE,
 };
 

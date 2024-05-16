@@ -143,44 +143,75 @@ int verify_checksum(char* buffer, size_t buffsize)
 	return (checksum == 0xffff);
 }
 
-int parse_response(struct s_env *env, char *buffer, const struct timeval *time)
+int substract_timeval(struct timeval *result, const struct timeval *tv1, struct timeval *tv2) // return 1 - 2
+{
+	/* Perform the carry for the later subtraction by updating tv2. */
+	if (tv1->tv_usec < tv2->tv_usec) {
+	  int nsec = (tv2->tv_usec - tv1->tv_usec) / 1000000 + 1;
+	  tv2->tv_usec -= 1000000 * nsec;
+	  tv2->tv_sec += nsec;
+	}
+	if (tv1->tv_usec - tv2->tv_usec > 1000000) {
+	  int nsec = (tv1->tv_usec - tv2->tv_usec) / 1000000;
+	  tv2->tv_usec += 1000000 * nsec;
+	  tv2->tv_sec -= nsec;
+	}
+
+	/* Compute the time remaining to wait.
+	   tv_usec is certainly positive. */
+	result->tv_sec = tv1->tv_sec - tv2->tv_sec;
+	result->tv_usec = tv1->tv_usec - tv2->tv_usec;
+
+	/* Return 1 if result is negative. */
+	return tv1->tv_sec < tv2->tv_sec;
+}
+
+int parse_response(struct s_env *env, char *buffer, int buffersize, struct timeval *send_time)
 {
 	struct ipv4_hdr *iphdr = (struct ipv4_hdr*)buffer;
 	struct icmp4_hdr *icmphdr = (struct icmp4_hdr*)(iphdr + 1);
-	struct timeval tv;
-	char *data = (time == NULL ? (char*)(icmphdr + 1) : ((char*)(icmphdr + 1)) + sizeof(struct timeval));
+	struct timeval recv_time;
+	char *data = (send_time == NULL ? (char*)(icmphdr + 1) : ((char*)(icmphdr + 1)) + sizeof(struct timeval));
 
-	gettimeofday(&tv, NULL);
+	gettimeofday(&recv_time, NULL);
 	printf("ident = %.4hx, ident received = %.4hx\n", env->ident, icmphdr->ident);
+	if (icmphdr->ident != env->ident)
+		return INCORRECT_IDENT;
 	if (!verify_checksum((char*)icmphdr, ICMP_HDR_SIZE + env->args.size)) {
 		printf("incorrect checksum\n");
 		return INCORRECT_CHECKSUM;
 	}
-	if (icmphdr->ident != env->ident)
-		return INCORRECT_IDENT;
-
-	if (time) {
+	if ((size_t)buffersize < env->args.size) {
+		printf("message should be the same size, weird (sent %zu received %d)\n", env->args.size, buffersize);
+		return INCORRECT_SIZE;
+	}
+	if (send_time) {
 		struct timeval final;
 		
-		final.tv_sec = tv.tv_sec - time->tv_sec;	
-		final.tv_usec = tv.tv_usec - time->tv_usec;	
-
+		bzero(&final, sizeof(struct timeval));
+		if(substract_timeval(&final, &recv_time, send_time)) {
+			printf("Impossible, message arrived before it was sent, and we are not doing quantum ping\n");
+			return QUANTUM_PING;
+		}
+		printf("%ld secs %ld usecs\n", final.tv_sec, final.tv_usec);
 		printf("there is a time\n");
 		if (final.tv_sec > env->max.tv_sec || ((final.tv_sec == env->max.tv_sec && final.tv_usec > env->max.tv_usec))) {
 			printf("> THAN\n");
-			memcpy(&final, &(env->max), sizeof(struct timeval));
+			memcpy(&(env->max), &final, sizeof(struct timeval));
 		}
 		else if (final.tv_sec < env->min.tv_sec || ((final.tv_sec == env->min.tv_sec && final.tv_usec < env->min.tv_usec))) {
 			printf("< THAN\n");
-			memcpy(&final, &(env->min), sizeof(struct timeval));
+			memcpy(&(env->min), &final, sizeof(struct timeval));
 		}
-
+		printf("%d bytes from "IPV4_FORMAT": icmp_seq=%hd ttl=%hhd time=%.2f ms\n", buffersize, IPV4_ARGUMENTS(iphdr->src), icmphdr->sequence, iphdr->ttl, (float)final.tv_sec * 1000 + (float)final.tv_usec / 1000);
+		return (1);
 	}
+	printf("%d bytes from "IPV4_FORMAT": icmp_seq=%hd ttl=%hhd\n", buffersize, IPV4_ARGUMENTS(iphdr->src), icmphdr->sequence, iphdr->ttl);
 	(void)data;
 	return (1);
 }
 
-int receive_answer(int sock, struct s_env *env, const struct timeval *time)
+int receive_answer(int sock, struct s_env *env, struct timeval *time)
 {
 	struct sockaddr addr;
 	char msg[MSG_SIZE];
@@ -206,7 +237,7 @@ int receive_answer(int sock, struct s_env *env, const struct timeval *time)
 			break;
 		}
 		printf("\n");
-	} while (parse_response(env, msg, time) == INCORRECT_IDENT);
+	} while (parse_response(env, msg, retval, time) == INCORRECT_IDENT);
 		return SUCCESS;
 }
 
@@ -264,12 +295,14 @@ void send_message(struct s_env *env, int sock, char *buffer)
 
 void print_end_stats(struct s_env *env)
 {
-	struct timeval time_end;
+	struct timeval end_time;
+	struct timeval total_time;
 
-	gettimeofday(&time_end, NULL);
+	gettimeofday(&end_time, NULL);
+	substract_timeval(&total_time, &end_time, &env->start_time);
 	printf("--- %s ping statistics ---\n", env->args.dest);
-	printf("%zu packets transmitted, %zu received, %ld%% packet loss, time (HERE SHOULD PRINT THE TIME PING HAS BEEN RUNNING)\n", env->transmitted, env->received, env->received == 0 ? (env->transmitted == 0 ? 0 : 100) : 100 - env->received * 100 / env->transmitted);
-	printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", 1.921394, 1.124215, 12.213, 0.);
+	printf("%zu packets transmitted, %zu received, %ld%% packet loss, time %ldms\n", env->transmitted, env->received, env->received == 0 ? (env->transmitted == 0 ? 0 : 100) : 100 - env->received * 100 / env->transmitted, total_time.tv_sec * 1000 + total_time.tv_usec / 1000);
+	printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", (float)env->min.tv_sec * 1000 + (float)env->min.tv_usec / 1000, (float)env->avg.tv_sec * 1000 + (float)env->avg.tv_usec / 1000, (float)env->max.tv_sec * 1000 + (float)env->max.tv_usec / 1000 , 0.);
 	printf("max %ld,%ld\n", env->max.tv_sec, env->max.tv_usec);
 	printf("min %ld,%ld\n", env->min.tv_sec, env->min.tv_usec);
 }
@@ -300,7 +333,7 @@ int ping(struct s_env *env)
 		fill_modifications(env, buffer);
 		send_message(env, sock, buffer);
 		receive_answer(sock, env, (env->args.size >= sizeof(struct timeval) ? (struct timeval *)(buffer + ICMP_HDR_SIZE) : NULL));
-		env->seq++;	
+		env->seq++;
 		if ((env->args.flags & COUNT_FLAG) && env->seq > env->args.count) 
 			running = 0;
 		sleep(1);
