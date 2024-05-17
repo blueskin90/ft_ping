@@ -110,6 +110,7 @@ struct s_env
 	size_t error_transmitted;
 	size_t received;
 	size_t error_received;
+	uint64_t usec_tot;
 	struct timeval min;	
 	struct timeval avg;	
 	struct timeval max;	

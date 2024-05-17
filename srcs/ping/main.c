@@ -195,9 +195,10 @@ int parse_response(struct s_env *env, char *buffer, int buffersize, struct timev
 		if (final.tv_sec > env->max.tv_sec || ((final.tv_sec == env->max.tv_sec && final.tv_usec > env->max.tv_usec))) {
 			memcpy(&(env->max), &final, sizeof(struct timeval));
 		}
-		else if (final.tv_sec < env->min.tv_sec || ((final.tv_sec == env->min.tv_sec && final.tv_usec < env->min.tv_usec))) {
+		if (final.tv_sec < env->min.tv_sec || ((final.tv_sec == env->min.tv_sec && final.tv_usec < env->min.tv_usec))) {
 			memcpy(&(env->min), &final, sizeof(struct timeval));
 		}
+		env->usec_tot += final.tv_sec * 1000000 + final.tv_usec;
 		printf("%d bytes from "IPV4_FORMAT": icmp_seq=%hd ttl=%hhd time=%.2f ms\n", buffersize - IPV4_HDR_SIZE, IPV4_ARGUMENTS(iphdr->src), icmphdr->sequence, iphdr->ttl, (float)final.tv_sec * 1000 + (float)final.tv_usec / 1000);
 		return (1);
 	}
@@ -297,6 +298,10 @@ void print_end_stats(struct s_env *env)
 
 	gettimeofday(&end_time, NULL);
 	substract_timeval(&total_time, &end_time, &env->start_time);
+	env->avg.tv_sec = env->usec_tot / 1000000;
+	env->avg.tv_usec = (env->usec_tot - (env->avg.tv_sec * 1000000));
+	env->avg.tv_sec /= env->transmitted;
+	env->avg.tv_usec /= env->transmitted;
 	printf("--- %s ping statistics ---\n", env->args.dest);
 	printf("%zu packets transmitted, %zu received, %ld%% packet loss, time %ldms\n", env->transmitted, env->received, env->received == 0 ? (env->transmitted == 0 ? 0 : 100) : 100 - env->received * 100 / env->transmitted, total_time.tv_sec * 1000 + total_time.tv_usec / 1000);
 	if (env->args.flags & TIMESTAMP_IN_MSG)
