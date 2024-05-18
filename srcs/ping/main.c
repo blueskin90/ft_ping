@@ -6,6 +6,8 @@
 #include <time.h>
 #include <limits.h>
 
+int running = 1;
+
 int init_env(struct s_env *env)
 {
 	srand(time(0));
@@ -234,7 +236,7 @@ int receive_answer(int sock, struct s_env *env, struct timeval *time)
 			env->error_received++;
 			break;
 		}
-	} while (parse_response(env, msg, retval, time) == INCORRECT_IDENT);
+	} while (parse_response(env, msg, retval, time) == INCORRECT_IDENT && running);
 	recvfrom(sock, msg, MSG_SIZE, 0, &addr, &addrlen);
 		return SUCCESS;
 }
@@ -258,7 +260,6 @@ int fill_message(struct s_env *env, char *buffer, size_t bufsize)
 	return (SUCCESS);
 }
 
-int running = 1;
 
 void intHandler(int dummy)
 {
@@ -282,6 +283,7 @@ void send_message(struct s_env *env, int sock, char *buffer)
 	int retval;
 
 	retval = sendto(sock, buffer, ICMP_HDR_SIZE + env->args.size, 0, (struct sockaddr*)&env->daddr, sizeof(env->daddr));
+	// inet_ntoa == addrto string
 	if (retval < 0)
 	{
 		printf("error : %s\n", strerror(errno));
@@ -320,6 +322,7 @@ int ping(struct s_env *env)
 	char buffer[ICMP_HDR_SIZE + DATA_SIZE];
 
 	sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	setsockopt(sock, IPPROTO_IP, IP_TTL, &env->ttl, sizeof(env->ttl));
 	if (sock < 0)
 	{
 		printf("Couldn't create the socket: %s\n", strerror(errno));
@@ -348,6 +351,7 @@ int			main(int ac, char **av)
 	int retval;
 
 	bzero(&env, sizeof(env));
+	env.ttl = 64;
 	retval = args_parsing(&env, ac, av);
 	if (retval != SUCCESS)
 		return retval;

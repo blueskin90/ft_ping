@@ -115,6 +115,7 @@ struct s_env
 	struct timeval avg;	
 	struct timeval max;	
 	struct timeval mdev;	
+	char ttl;
 };
 
 int args_parsing(struct s_env *env, int ac, char **av);

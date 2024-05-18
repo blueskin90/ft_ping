@@ -69,12 +69,15 @@ static int parse_dest(struct s_env *env, char *dest)
 	struct addrinfo hints;
 	struct addrinfo *res;
 	int retval;
+	char host[1024];
+	char serv[1024];
 
 	env->args.dest = dest;
 	bzero(&hints, sizeof(hints));
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_RAW;
 	hints.ai_protocol = IPPROTO_ICMP;
+	hints.ai_flags |= AI_CANONNAME;
 	retval = getaddrinfo(dest, 0, &hints, &res);
 	if (retval < 0) {
 		fprintf(stderr, "%s: Couldn't resolve host %s: %s\n", env->progname, dest, gai_strerror(retval));
@@ -85,7 +88,38 @@ static int parse_dest(struct s_env *env, char *dest)
 	env->daddr.sin_family = AF_INET;
 	env->daddr.sin_port = 0;
 	memcpy(&env->daddr.sin_addr, &((struct sockaddr_in*)res->ai_addr)->sin_addr, sizeof(env->daddr.sin_addr));
+	getnameinfo((const struct sockaddr*)&env->daddr, sizeof(env->daddr), host, 1024, serv, 1024, 0);
+	printf("host: %s\n", res->ai_canonname);
 	freeaddrinfo(res);
+	return SUCCESS;
+}
+
+static int parse_ttl(struct s_env *env, int ac, char **av, int *i)
+{
+	int found = 0;
+	long long int size;
+	char *end;
+
+	env->args.flags |= SIZE_FLAG;
+	if (av[*i][2] != 0) {							// parse in same arg
+		size = strtoll(&(av[*i][2]), &end, 10);
+		if (*end != 0)
+			return invalid_argument(env, &(av[*i][2]));
+		found = 1;
+	}
+	if (!found) {									// parse next arg as complement
+		if (*i + 1 == ac)
+			return option_requires_argument(env, av[*i]);
+		(*i)++;
+		size = strtoll(av[*i], &end, 10);
+		if (end == av[*i] || *end != 0)
+			return invalid_argument(env, av[*i]);
+	}
+	if (size > 255 || size < 0) {
+		fprintf(stderr, "%s: invalid argument: '%lld': out of range: 0 <= value <= 255\n", env->progname, size);
+		return SIZE_TOO_BIG; // real one doesnt do this, it just wait forever
+	}
+	env->ttl = size;
 	return SUCCESS;
 }
 
@@ -115,7 +149,6 @@ static int parse_size(struct s_env *env, int ac, char **av, int *i)
 		return SIZE_TOO_BIG; // real one doesnt do this, it just wait forever
 	}
 	env->args.size = size;
-	printf("size = %zu\n", size);
 	return SUCCESS;
 }
 
@@ -151,6 +184,8 @@ static int parse_arg(struct s_env *env, int ac, char **av, int *i)
 		return parse_count(env, ac, av, i);
 	if (strncmp(av[*i], "-s", 2) == 0)
 		return parse_size(env, ac, av, i);
+	if (strncmp(av[*i], "-t", 2) == 0)
+		return parse_ttl(env, ac, av, i);
 	if (strncmp(av[*i], "-p", 2) == 0)
 		return parse_pattern(env, ac, av, i);
 	if (strcmp(av[*i], "-h") == 0) {
