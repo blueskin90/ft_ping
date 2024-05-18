@@ -10,14 +10,7 @@ int init_env(struct s_env *env)
 {
 	srand(time(0));
 	env->ident = rand();
-	env->saddr.sin_family = AF_INET;
-	env->saddr.sin_port = 0;
 	env->seq = 1;
-	if (inet_pton(AF_INET, "10.0.2.15", &env->saddr.sin_addr) != 1)
-	{
-		printf("source IP configuration failed\n");
-		return (0);
-	}
 	env->min.tv_sec = LONG_MAX;
 	env->min.tv_usec = LONG_MAX;
 	return SUCCESS;
@@ -199,6 +192,13 @@ int parse_response(struct s_env *env, char *buffer, int buffersize, struct timev
 			memcpy(&(env->min), &final, sizeof(struct timeval));
 		}
 		env->usec_tot += final.tv_sec * 1000000 + final.tv_usec;
+		if (env->received > 1) {
+			int64_t val =(final.tv_sec * 1000000 + final.tv_usec) - (env->usec_tot / env->received);
+			if (val < 0)
+				env->usec_dev -= val;
+			else
+				env->usec_dev += val;
+		}
 		printf("%d bytes from "IPV4_FORMAT": icmp_seq=%hd ttl=%hhd time=%.2f ms\n", buffersize - IPV4_HDR_SIZE, IPV4_ARGUMENTS(iphdr->src), icmphdr->sequence, iphdr->ttl, (float)final.tv_sec * 1000 + (float)final.tv_usec / 1000);
 		return (1);
 	}
@@ -298,33 +298,32 @@ void print_end_stats(struct s_env *env)
 
 	gettimeofday(&end_time, NULL);
 	substract_timeval(&total_time, &end_time, &env->start_time);
-	env->avg.tv_sec = env->usec_tot / 1000000;
-	env->avg.tv_usec = (env->usec_tot - (env->avg.tv_sec * 1000000));
-	env->avg.tv_sec /= env->transmitted;
-	env->avg.tv_usec /= env->transmitted;
 	printf("--- %s ping statistics ---\n", env->args.dest);
 	printf("%zu packets transmitted, %zu received, %ld%% packet loss, time %ldms\n", env->transmitted, env->received, env->received == 0 ? (env->transmitted == 0 ? 0 : 100) : 100 - env->received * 100 / env->transmitted, total_time.tv_sec * 1000 + total_time.tv_usec / 1000);
-	if (env->args.flags & TIMESTAMP_IN_MSG)
-		printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", (float)env->min.tv_sec * 1000 + (float)env->min.tv_usec / 1000, (float)env->avg.tv_sec * 1000 + (float)env->avg.tv_usec / 1000, (float)env->max.tv_sec * 1000 + (float)env->max.tv_usec / 1000 , 0.);
+	if (env->args.flags & TIMESTAMP_IN_MSG) {
+		env->avg.tv_sec = env->usec_tot / 1000000;
+		env->avg.tv_usec = (env->usec_tot - (env->avg.tv_sec * 1000000));
+		env->avg.tv_sec /= env->received;
+		env->avg.tv_usec /= env->received;
+		env->mdev.tv_sec = env->usec_dev / 1000000;
+		env->mdev.tv_usec = (env->usec_dev - (env->mdev.tv_sec * 1000000));
+		env->mdev.tv_sec /= env->received;
+		env->mdev.tv_usec /= env->received;
+
+		printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", (float)env->min.tv_sec * 1000 + (float)env->min.tv_usec / 1000, (float)env->avg.tv_sec * 1000 + (float)env->avg.tv_usec / 1000, (float)env->max.tv_sec * 1000 + (float)env->max.tv_usec / 1000 , (float)env->mdev.tv_sec * 1000 + (float)env->mdev.tv_usec / 1000 );
+	}
 }
 
 int ping(struct s_env *env)
 {
 	int sock;
 	char buffer[ICMP_HDR_SIZE + DATA_SIZE];
-	int retval;
 
 	sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if (sock < 0)
 	{
 		printf("Couldn't create the socket: %s\n", strerror(errno));
 		return 0;
-	}
-	retval = bind(sock, (struct sockaddr*)&env->saddr, sizeof(env->saddr));
-	if (retval < 0)
-	{
-		printf("error : %s\n", strerror(errno));
-		return (0);
 	}
 	fill_message(env, buffer,sizeof(buffer));
 	print_first_line(env);

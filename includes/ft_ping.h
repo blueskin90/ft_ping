@@ -101,7 +101,6 @@ struct s_env
 	char *progname;
 	char dest_ip[16];
 	uint16_t ident;
-	struct sockaddr_in saddr;
 	struct sockaddr_in daddr;
 	struct icmp4_hdr *hdr;
 	struct s_args args;
@@ -111,6 +110,7 @@ struct s_env
 	size_t received;
 	size_t error_received;
 	uint64_t usec_tot;
+	uint64_t usec_dev;
 	struct timeval min;	
 	struct timeval avg;	
 	struct timeval max;	
