@@ -1,0 +1,6 @@
+/changer endpoint par ta structure sockaddr_in
+        char revhostname[1000];
+        bzero(revhostname, 1000);
+        int ret = getnameinfo((struct sockaddr*)&endpoint, (socklen_t)sizeof(struct sockaddr),
+                        revhostname, 1000, 0, 0, 0);
+        printf("hostname: [%s]\n", revhostname);
