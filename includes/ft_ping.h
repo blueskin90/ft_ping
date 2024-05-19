@@ -30,7 +30,7 @@
 #define IPV4_HDR_SIZE 20
 #define ICMP_HDR_SIZE 8
 
-#define IPV4_FORMAT "%hhd.%hhd.%hhd.%hhd"
+#define IPV4_FORMAT "%hhu.%hhu.%hhu.%hhu"
 
 #define IPV4_ARGUMENTS(x) x.addr_split[0], x.addr_split[1], x.addr_split[2], x.addr_split[3]
 
