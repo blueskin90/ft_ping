@@ -15,7 +15,7 @@ NAME = ft_ping
 
 INCLUDES = -I includes
 
-FLAGS = -Wall -Wextra -Werror -g3
+FLAGS = -Wall -Wextra -Werror -fsanitize=address -g3
 
 OBJS = $(addprefix objs/, $(addsuffix .o, \
 			$(addprefix ping/, \

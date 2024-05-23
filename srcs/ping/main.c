@@ -8,6 +8,61 @@
 
 int running = 1;
 
+struct s_list* create_node(uint16_t seq, struct timeval *time)
+{
+	struct s_list *node = malloc(time ? sizeof(struct s_list) : sizeof(struct s_list) - sizeof(struct timeval));
+
+	if (!node) {
+		fprintf(stderr, "malloc failed :'(\n");
+		return (NULL);
+	}
+	node->next = NULL;
+	node->seq = seq;
+	if (time)
+		memcpy(&node->time, time, sizeof(struct timeval));
+	return node;
+}
+
+void add_node(struct s_list **list, struct s_list *node)
+{
+	struct s_list *ptr;
+
+	node->next = NULL;
+	if (!list | !node)
+		return;
+	if (*list == NULL)
+		*list = node;
+	else {
+		ptr = *list;
+		while (ptr->next)
+			ptr = ptr->next;
+		ptr->next = node;
+	}
+}
+
+struct s_list* get_node(struct s_list **list, uint16_t seq)
+{
+	struct s_list *ptr = NULL;
+	struct s_list *prev = NULL;
+
+	if (!list | !(*list))
+		return NULL;
+	if (*list == NULL)
+		return NULL;
+	ptr = *list;
+	while (ptr && ptr-> seq != seq) {
+		prev = ptr;
+		ptr = ptr->next;
+	}
+	if (prev)
+		prev->next = (ptr ? ptr->next : NULL);
+	if (ptr)
+		ptr->next = NULL;
+	if (*list == ptr && ptr)
+		*list = ptr->next;
+	return ptr;
+}
+
 int init_env(struct s_env *env)
 {
 	srand(time(0));
@@ -167,6 +222,7 @@ int parse_response(struct s_env *env, char *buffer, int buffersize, struct timev
 	struct icmp4_hdr *icmphdr = (struct icmp4_hdr*)(iphdr + 1);
 	struct timeval recv_time;
 	char *data = (send_time == NULL ? (char*)(icmphdr + 1) : ((char*)(icmphdr + 1)) + sizeof(struct timeval));
+	struct s_list *node;
 
 	gettimeofday(&recv_time, NULL);
 	if (icmphdr->ident != env->ident)
@@ -178,6 +234,11 @@ int parse_response(struct s_env *env, char *buffer, int buffersize, struct timev
 	if ((size_t)buffersize < env->args.size) {
 		printf("message should be the same size, weird (sent %zu received %d)\n", env->args.size, buffersize);
 		return INCORRECT_SIZE;
+	}
+	node = get_node(&env->sent_list, icmphdr->sequence);
+	if (!node) {
+		printf("womp womp\n");
+		return INCORRECT_IDENT;
 	}
 	if (send_time) {
 		struct timeval final;
@@ -201,9 +262,13 @@ int parse_response(struct s_env *env, char *buffer, int buffersize, struct timev
 			else
 				env->usec_dev += val;
 		}
+		memcpy(&node->time, &final, sizeof(struct timeval));
+		add_node(&env->received_list, node);
 		printf("%d bytes from "IPV4_FORMAT": icmp_seq=%hd ttl=%hhd time=%.2f ms\n", buffersize - IPV4_HDR_SIZE, IPV4_ARGUMENTS(iphdr->src), icmphdr->sequence, iphdr->ttl, (float)final.tv_sec * 1000 + (float)final.tv_usec / 1000);
 		return (1);
 	}
+	else
+		add_node(&env->received_list, node);
 	printf("%d bytes from "IPV4_FORMAT": icmp_seq=%hd ttl=%hhd\n", buffersize - IPV4_HDR_SIZE, IPV4_ARGUMENTS(iphdr->src), icmphdr->sequence, iphdr->ttl);
 	(void)data;
 	return (1);
@@ -267,25 +332,36 @@ void intHandler(int dummy)
 	running = 0;
 }
 
-void fill_modifications(struct s_env *env, char *buffer)
+int fill_modifications(struct s_env *env, char *buffer)
 {
 	struct icmp4_hdr *msg = (struct icmp4_hdr*)buffer;
+	struct s_list *node;
 
 	msg->sequence = env->seq;
 	bzero(&msg->checksum, sizeof(msg->checksum));
-	if (env->args.flags & TIMESTAMP_IN_MSG)
+	if (env->args.flags & TIMESTAMP_IN_MSG) {
 		gettimeofday(&msg->time, NULL); // we do this last so its closer to reality
+		node = create_node(env->seq, &msg->time); 
+	}
+	else
+		node = create_node(env->seq, &msg->time); 
+	if (node == NULL)
+		return MALLOC_ERROR;
 	compute_checksum(buffer, ICMP_HDR_SIZE + env->args.size);
+	add_node(&env->sent_list, node);
+	return SUCCESS;
 }
 
 void send_message(struct s_env *env, int sock, char *buffer)
 {
 	int retval;
+	struct s_list *node;
 
 	retval = sendto(sock, buffer, ICMP_HDR_SIZE + env->args.size, 0, (struct sockaddr*)&env->daddr, sizeof(env->daddr));
-	// inet_ntoa == addrto string
 	if (retval < 0)
 	{
+		node = get_node(&env->sent_list, env->seq);
+		free(node);
 		printf("error : %s\n", strerror(errno));
 		env->error_transmitted++;
 		return;
@@ -321,6 +397,7 @@ int ping(struct s_env *env)
 	int sock;
 	char buffer[ICMP_HDR_SIZE + DATA_SIZE];
 
+	signal(SIGINT, intHandler);
 	sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	setsockopt(sock, IPPROTO_IP, IP_TTL, &env->ttl, sizeof(env->ttl));
 	if (sock < 0)
@@ -330,7 +407,6 @@ int ping(struct s_env *env)
 	}
 	fill_message(env, buffer,sizeof(buffer));
 	print_first_line(env);
-	signal(SIGINT, intHandler);
 	gettimeofday(&env->start_time, NULL);
 	while (running) {
 		fill_modifications(env, buffer);
@@ -343,6 +419,30 @@ int ping(struct s_env *env)
 	}
 	print_end_stats(env);
 	return SUCCESS;
+}
+
+void free_list(struct s_list *list)
+{
+	struct s_list *ptr;
+	struct s_list *tmp;
+
+	if (!list)
+		return;
+	ptr = list;
+	while (ptr)
+	{
+		tmp = ptr;
+		ptr = ptr->next;
+		free(tmp);
+	}
+}
+
+void free_env(struct s_env *env)
+{
+	free_list(env->sent_list);
+	env->sent_list = NULL;
+	free_list(env->received_list);	
+	env->received_list = NULL;
 }
 
 int			main(int ac, char **av)
@@ -359,5 +459,6 @@ int			main(int ac, char **av)
 	if (retval != SUCCESS)
 		return retval;
 	ping(&env);
+	free_env(&env);
 	return 0;
 }

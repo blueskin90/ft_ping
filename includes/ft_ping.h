@@ -34,6 +34,12 @@
 
 #define IPV4_ARGUMENTS(x) x.addr_split[0], x.addr_split[1], x.addr_split[2], x.addr_split[3]
 
+struct s_list {
+	struct s_list *next;
+	uint16_t seq;
+	struct timeval time;
+};
+
 enum e_errorcode {
 	ERROR,
 	SUCCESS,
@@ -46,6 +52,7 @@ enum e_errorcode {
 	INCORRECT_CHECKSUM,
 	INCORRECT_SIZE,
 	QUANTUM_PING,
+	MALLOC_ERROR,
 	USAGE,
 };
 
@@ -104,7 +111,7 @@ struct s_env
 	struct sockaddr_in daddr;
 	struct icmp4_hdr *hdr;
 	struct s_args args;
-	size_t seq;
+	uint16_t seq;
 	size_t transmitted;
 	size_t error_transmitted;
 	size_t received;
@@ -116,6 +123,8 @@ struct s_env
 	struct timeval max;	
 	struct timeval mdev;	
 	char ttl;
+	struct s_list *sent_list;
+	struct s_list *received_list;
 };
 
 int args_parsing(struct s_env *env, int ac, char **av);
