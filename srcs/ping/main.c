@@ -216,6 +216,18 @@ int substract_timeval(struct timeval *result, const struct timeval *tv1, struct 
 	return tv1->tv_sec < tv2->tv_sec;
 }
 
+int parse_response_error(struct s_env *env, char* buffer, int buffersize, struct ipv4_hdr *ipv4_hdr, struct icmp4_hdr *icmp_hdr)
+{
+	struct icmp4_hdr *old_message = icmp_hdr + 1;
+
+	(void)env;
+	(void)buffer;
+	(void)buffersize;
+	(void)ipv4_hdr;
+	printf("msg_type: %hhd, code %hhd, ident %hd, seq %hd\n", old_message->msg_type, old_message->code, old_message->ident, old_message->sequence);
+	return SUCCESS;
+}
+
 int parse_response(struct s_env *env, char *buffer, int buffersize, struct timeval *send_time)
 {
 	struct ipv4_hdr *iphdr = (struct ipv4_hdr*)buffer;
@@ -224,6 +236,9 @@ int parse_response(struct s_env *env, char *buffer, int buffersize, struct timev
 	char *data = (send_time == NULL ? (char*)(icmphdr + 1) : ((char*)(icmphdr + 1)) + sizeof(struct timeval));
 	struct s_list *node;
 
+		
+	if (icmphdr->msg_type != ECHO_REPLY)
+	       return parse_response_error(env, buffer, buffersize, iphdr, icmphdr);	
 	gettimeofday(&recv_time, NULL);
 	if (icmphdr->ident != env->ident)
 		return INCORRECT_IDENT;
