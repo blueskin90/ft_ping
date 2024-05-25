@@ -369,6 +369,20 @@ void send_message(struct s_env *env, int sock, char *buffer)
 	env->transmitted++;
 }
 
+void calculate_mdev(struct s_env *env)
+{
+	uint64_t total;
+	struct s_list *ptr;
+
+	ptr = env->received_list;
+	while (ptr) {
+		total += ptr->time.tv_sec * 1000000 + ptr->time.tv_usec;
+		ptr = ptr->next;
+	}
+	env->mdev.tv_sec = total / 1000000;
+	env->mdev.tv_usec = total - env->mdev.tv_sec * 1000000;
+}
+
 void print_end_stats(struct s_env *env)
 {
 	struct timeval end_time;
@@ -379,6 +393,7 @@ void print_end_stats(struct s_env *env)
 	printf("--- %s ping statistics ---\n", env->args.dest);
 	printf("%zu packets transmitted, %zu received, %ld%% packet loss, time %ldms\n", env->transmitted, env->received, env->received == 0 ? (env->transmitted == 0 ? 0 : 100) : 100 - env->received * 100 / env->transmitted, total_time.tv_sec * 1000 + total_time.tv_usec / 1000);
 	if (env->args.flags & TIMESTAMP_IN_MSG) {
+		calculate_mdev(env);
 		env->avg.tv_sec = env->usec_tot / 1000000;
 		env->avg.tv_usec = (env->usec_tot - (env->avg.tv_sec * 1000000));
 		env->avg.tv_sec /= env->received;
@@ -394,24 +409,16 @@ void print_end_stats(struct s_env *env)
 
 int ping(struct s_env *env)
 {
-	int sock;
 	char buffer[ICMP_HDR_SIZE + DATA_SIZE];
 
 	signal(SIGINT, intHandler);
-	sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-	setsockopt(sock, IPPROTO_IP, IP_TTL, &env->ttl, sizeof(env->ttl));
-	if (sock < 0)
-	{
-		printf("Couldn't create the socket: %s\n", strerror(errno));
-		return 0;
-	}
 	fill_message(env, buffer,sizeof(buffer));
 	print_first_line(env);
 	gettimeofday(&env->start_time, NULL);
 	while (running) {
 		fill_modifications(env, buffer);
-		send_message(env, sock, buffer);
-		receive_answer(sock, env, (env->args.size >= sizeof(struct timeval) ? (struct timeval *)(buffer + ICMP_HDR_SIZE) : NULL));
+		send_message(env, env->sock, buffer);
+		receive_answer(env->sock, env, (env->args.size >= sizeof(struct timeval) ? (struct timeval *)(buffer + ICMP_HDR_SIZE) : NULL));
 		env->seq++;
 		if ((env->args.flags & COUNT_FLAG) && env->seq > env->args.count) 
 			running = 0;

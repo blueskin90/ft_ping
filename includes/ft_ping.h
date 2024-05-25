@@ -53,6 +53,7 @@ enum e_errorcode {
 	INCORRECT_SIZE,
 	QUANTUM_PING,
 	MALLOC_ERROR,
+	SOCK_ERROR,
 	USAGE,
 };
 
@@ -107,6 +108,7 @@ struct s_env
 	struct timeval start_time;
 	char *progname;
 	char dest_ip[16];
+	char* addr;
 	uint16_t ident;
 	struct sockaddr_in daddr;
 	struct icmp4_hdr *hdr;
@@ -125,6 +127,7 @@ struct s_env
 	char ttl;
 	struct s_list *sent_list;
 	struct s_list *received_list;
+	int sock;
 };
 
 int args_parsing(struct s_env *env, int ac, char **av);

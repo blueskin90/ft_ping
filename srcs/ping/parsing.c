@@ -2,6 +2,7 @@
 
 #include <sys/socket.h>
 #include <string.h>
+#include <errno.h>
 
 static int parse_count(struct s_env *env, int ac, char **av, int *i)
 {
@@ -64,6 +65,20 @@ static void parse_dest_ip(struct s_env *env, struct sockaddr_in* addr)
 	}
 }
 
+static int open_socket(struct s_env *env)
+{
+	env->sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
+	if (env->args.flags & VERBOSE_FLAG)
+		printf("ping: sock4.fd: %d (socktype: SOCK_RAW), hints.ai_family: AF_UNSPEC\n\n", env->sock);
+	setsockopt(env->sock, IPPROTO_IP, IP_TTL, &env->ttl, sizeof(env->ttl));
+	if (env->sock < 0)
+	{
+		printf("Couldn't create the socket: %s\n", strerror(errno));
+		return SOCK_ERROR;
+	}
+	return SUCCESS;
+}
+
 static int parse_dest(struct s_env *env, char *dest)
 {
 	struct addrinfo hints;
@@ -72,6 +87,8 @@ static int parse_dest(struct s_env *env, char *dest)
 	char host[1024];
 	char serv[1024];
 
+	if (open_socket(env) != SUCCESS)
+		return SOCK_ERROR; 
 	env->args.dest = dest;
 	bzero(&hints, sizeof(hints));
 	hints.ai_family = AF_INET;
@@ -89,7 +106,7 @@ static int parse_dest(struct s_env *env, char *dest)
 	env->daddr.sin_port = 0;
 	memcpy(&env->daddr.sin_addr, &((struct sockaddr_in*)res->ai_addr)->sin_addr, sizeof(env->daddr.sin_addr));
 	getnameinfo((const struct sockaddr*)&env->daddr, sizeof(env->daddr), host, 1024, serv, 1024, 0);
-	printf("host: %s\n", res->ai_canonname);
+	printf("ai.ai_family: AF_INET, ai->ai_canonname: %s\n", res->ai_canonname);
 	freeaddrinfo(res);
 	return SUCCESS;
 }
