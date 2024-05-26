@@ -69,7 +69,7 @@ static int open_socket(struct s_env *env)
 {
 	env->sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if (env->args.flags & VERBOSE_FLAG)
-		printf("ping: sock4.fd: %d (socktype: SOCK_RAW), hints.ai_family: AF_UNSPEC\n\n", env->sock);
+		printf("ping: sock4.fd: %d (socktype: SOCK_RAW), hints.ai_family: AF_INET\n\n", env->sock);
 	setsockopt(env->sock, IPPROTO_IP, IP_TTL, &env->ttl, sizeof(env->ttl));
 	if (env->sock < 0)
 	{

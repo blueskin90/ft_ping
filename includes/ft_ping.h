@@ -30,6 +30,9 @@
 #define IPV4_HDR_SIZE 20
 #define ICMP_HDR_SIZE 8
 
+#define ICMP_TTL_EXCEEDED 11
+#define ICMP_DEST_UNREACHABLE 3
+
 #define IPV4_FORMAT "%hhu.%hhu.%hhu.%hhu"
 
 #define IPV4_ARGUMENTS(x) x.addr_split[0], x.addr_split[1], x.addr_split[2], x.addr_split[3]

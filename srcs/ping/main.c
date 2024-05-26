@@ -224,7 +224,6 @@ int parse_response_error(struct s_env *env, char* buffer, int buffersize, struct
 
 	(void)old_ip;
 	(void)ipv4_hdr;
-	printf("msg_type: %hhd, code %hhd, ident %hu, seq %hu\n", old_message->msg_type, old_message->code, old_message->ident, old_message->sequence);
 	if (old_message->ident != env->ident)
 		return INCORRECT_IDENT;
 	if (!verify_checksum(buffer, buffersize))
@@ -233,6 +232,10 @@ int parse_response_error(struct s_env *env, char* buffer, int buffersize, struct
 	if (!node)
 		return INCORRECT_IDENT;
 	free(node);
+	if (icmp_hdr->msg_type == ICMP_TTL_EXCEEDED)
+	       printf("from: "IPV4_FORMAT" icmp_seq=%d Time to live exceeded\n", IPV4_ARGUMENTS(ipv4_hdr->src), old_message->sequence);
+	else if (icmp_hdr->msg_type == ICMP_DEST_UNREACHABLE)
+	       printf("from: "IPV4_FORMAT" icmp_seq=%d Destination unreachable\n", IPV4_ARGUMENTS(ipv4_hdr->src), old_message->sequence);
 	env->error_received++;
 	return SUCCESS;
 }
