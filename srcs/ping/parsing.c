@@ -82,7 +82,7 @@ static int open_socket(struct s_env *env)
 static int parse_dest(struct s_env *env, char *dest)
 {
 	struct addrinfo hints;
-	struct addrinfo *res;
+	struct addrinfo *res = NULL;
 	int retval;
 	char host[1024];
 	char serv[1024];
@@ -98,7 +98,8 @@ static int parse_dest(struct s_env *env, char *dest)
 	retval = getaddrinfo(dest, 0, &hints, &res);
 	if (retval < 0) {
 		fprintf(stderr, "%s: Couldn't resolve host %s: %s\n", env->progname, dest, gai_strerror(retval));
-		freeaddrinfo(res);
+		if (res)
+			freeaddrinfo(res);
 		return RESOLUTION_ERROR;
 	}
 	parse_dest_ip(env, (struct sockaddr_in *)res->ai_addr);
@@ -106,7 +107,8 @@ static int parse_dest(struct s_env *env, char *dest)
 	env->daddr.sin_port = 0;
 	memcpy(&env->daddr.sin_addr, &((struct sockaddr_in*)res->ai_addr)->sin_addr, sizeof(env->daddr.sin_addr));
 	getnameinfo((const struct sockaddr*)&env->daddr, sizeof(env->daddr), host, 1024, serv, 1024, 0);
-	printf("ai.ai_family: AF_INET, ai->ai_canonname: %s\n", res->ai_canonname);
+	if (env->args.flags & VERBOSE_FLAG)
+		printf("ai.ai_family: AF_INET, ai->ai_canonname: %s\n", res->ai_canonname);
 	freeaddrinfo(res);
 	return SUCCESS;
 }

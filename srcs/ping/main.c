@@ -218,13 +218,36 @@ int substract_timeval(struct timeval *result, const struct timeval *tv1, struct 
 
 int parse_response_error(struct s_env *env, char* buffer, int buffersize, struct ipv4_hdr *ipv4_hdr, struct icmp4_hdr *icmp_hdr)
 {
-	struct icmp4_hdr *old_message = icmp_hdr + 1;
+	struct ipv4_hdr *old_ip = ((struct ipv4_hdr*)icmp_hdr + 1);
+	struct icmp4_hdr *old_message = (struct icmp4_hdr*)(buffer + ICMP_HDR_SIZE + IPV4_HDR_SIZE);
+	struct s_list *node;
 
-	(void)env;
-	(void)buffer;
-	(void)buffersize;
+	(void)old_ip;
+	for (int i = ICMP_HDR_SIZE + IPV4_HDR_SIZE; i < buffersize; i++)
+	{
+			printf("%.2hhx", buffer[i]);
+				if (i % 15 == 0 && i != 0)
+					printf("\n");
+				else if (i % 2 == 1)
+					printf(" ");
+	}
+	printf("\n");
 	(void)ipv4_hdr;
-	printf("msg_type: %hhd, code %hhd, ident %hd, seq %hd\n", old_message->msg_type, old_message->code, old_message->ident, old_message->sequence);
+	printf("msg_type: %hhd, code %hhd, ident %hu, seq %hu\n", old_message->msg_type, old_message->code, old_message->ident, old_message->sequence);
+	printf("env ident: %u\n", env->ident);
+	printf("%s:%d\n", __func__, __LINE__);
+	if (old_message->ident != env->ident)
+		return INCORRECT_IDENT;
+	printf("%s:%d\n", __func__, __LINE__);
+	if (!verify_checksum(buffer, buffersize))
+		return INCORRECT_CHECKSUM;
+	printf("%s:%d\n", __func__, __LINE__);
+	node = get_node(&env->sent_list, icmp_hdr->sequence);
+	if (!node)
+		return INCORRECT_IDENT;
+	printf("%s:%d\n", __func__, __LINE__);
+	free(node);
+	env->error_received++;
 	return SUCCESS;
 }
 
@@ -238,7 +261,7 @@ int parse_response(struct s_env *env, char *buffer, int buffersize, struct timev
 
 		
 	if (icmphdr->msg_type != ECHO_REPLY)
-	       return parse_response_error(env, buffer, buffersize, iphdr, icmphdr);	
+	       return parse_response_error(env, (char*)icmphdr, buffersize - sizeof(struct ipv4_hdr), iphdr, icmphdr);	
 	gettimeofday(&recv_time, NULL);
 	if (icmphdr->ident != env->ident)
 		return INCORRECT_IDENT;
@@ -252,9 +275,9 @@ int parse_response(struct s_env *env, char *buffer, int buffersize, struct timev
 	}
 	node = get_node(&env->sent_list, icmphdr->sequence);
 	if (!node) {
-		printf("womp womp\n");
 		return INCORRECT_IDENT;
 	}
+	env->received++;
 	if (send_time) {
 		struct timeval final;
 		
@@ -309,7 +332,6 @@ int receive_answer(int sock, struct s_env *env, struct timeval *time)
 					printf(" ");
 			}
 	*/
-			env->received++;
 		}
 		else {
 			printf("error when receiving\n");
@@ -411,12 +433,16 @@ void print_end_stats(struct s_env *env)
 		calculate_mdev(env);
 		env->avg.tv_sec = env->usec_tot / 1000000;
 		env->avg.tv_usec = (env->usec_tot - (env->avg.tv_sec * 1000000));
-		env->avg.tv_sec /= env->received;
-		env->avg.tv_usec /= env->received;
+		if (env->received) {
+			env->avg.tv_sec /= env->received;
+			env->avg.tv_usec /= env->received;
+		}
 		env->mdev.tv_sec = env->usec_dev / 1000000;
 		env->mdev.tv_usec = (env->usec_dev - (env->mdev.tv_sec * 1000000));
-		env->mdev.tv_sec /= env->received;
-		env->mdev.tv_usec /= env->received;
+		if (env->received) {
+			env->mdev.tv_sec /= env->received;
+			env->mdev.tv_usec /= env->received;
+		}
 
 		printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", (float)env->min.tv_sec * 1000 + (float)env->min.tv_usec / 1000, (float)env->avg.tv_sec * 1000 + (float)env->avg.tv_usec / 1000, (float)env->max.tv_sec * 1000 + (float)env->max.tv_usec / 1000 , (float)env->mdev.tv_sec * 1000 + (float)env->mdev.tv_usec / 1000 );
 	}
