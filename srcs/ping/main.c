@@ -223,29 +223,15 @@ int parse_response_error(struct s_env *env, char* buffer, int buffersize, struct
 	struct s_list *node;
 
 	(void)old_ip;
-	for (int i = ICMP_HDR_SIZE + IPV4_HDR_SIZE; i < buffersize; i++)
-	{
-			printf("%.2hhx", buffer[i]);
-				if (i % 15 == 0 && i != 0)
-					printf("\n");
-				else if (i % 2 == 1)
-					printf(" ");
-	}
-	printf("\n");
 	(void)ipv4_hdr;
 	printf("msg_type: %hhd, code %hhd, ident %hu, seq %hu\n", old_message->msg_type, old_message->code, old_message->ident, old_message->sequence);
-	printf("env ident: %u\n", env->ident);
-	printf("%s:%d\n", __func__, __LINE__);
 	if (old_message->ident != env->ident)
 		return INCORRECT_IDENT;
-	printf("%s:%d\n", __func__, __LINE__);
 	if (!verify_checksum(buffer, buffersize))
 		return INCORRECT_CHECKSUM;
-	printf("%s:%d\n", __func__, __LINE__);
-	node = get_node(&env->sent_list, icmp_hdr->sequence);
+	node = get_node(&env->sent_list, old_message->sequence);
 	if (!node)
 		return INCORRECT_IDENT;
-	printf("%s:%d\n", __func__, __LINE__);
 	free(node);
 	env->error_received++;
 	return SUCCESS;
@@ -320,27 +306,19 @@ int receive_answer(int sock, struct s_env *env, struct timeval *time)
 	int retval;
 
 	bzero(msg, MSG_SIZE);
-	do {
-		retval = recvfrom(sock, msg, MSG_SIZE, MSG_PEEK, &addr, &addrlen);
-		if (retval != -1) {
-	/*
-			for (int i = 0; i < retval; i++) {
-				printf("%.2hhx", msg[i]);
-				if (i % 15 == 0 && i != 0)
-					printf("\n");
-				else if (i % 2 == 1)
-					printf(" ");
-			}
-	*/
-		}
-		else {
-			printf("error when receiving\n");
-			env->error_received++;
-			break;
-		}
-	} while (parse_response(env, msg, retval, time) == INCORRECT_IDENT && running);
-	recvfrom(sock, msg, MSG_SIZE, 0, &addr, &addrlen);
+	retval = recvfrom(sock, msg, MSG_SIZE, MSG_PEEK | MSG_DONTWAIT, &addr, &addrlen);
+	if (retval < 0) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK)
+			return SUCCESS;
+		printf("error when receiving\n");
+		env->error_received++;
+		return 0;
+	}
+	if (parse_response(env, msg, retval, time) == SUCCESS) {
+		recvfrom(sock, msg, MSG_SIZE, 0, &addr, &addrlen);
 		return SUCCESS;
+	}
+	return 0;
 }
 
 int print_first_line(struct s_env *env)
@@ -451,19 +429,29 @@ void print_end_stats(struct s_env *env)
 int ping(struct s_env *env)
 {
 	char buffer[ICMP_HDR_SIZE + DATA_SIZE];
+	struct timeval startloop;
+	struct timeval endloop;
+	struct timeval final;
+	size_t usec_tot = 1000000;
 
 	signal(SIGINT, intHandler);
 	fill_message(env, buffer,sizeof(buffer));
 	print_first_line(env);
 	gettimeofday(&env->start_time, NULL);
 	while (running) {
-		fill_modifications(env, buffer);
-		send_message(env, env->sock, buffer);
+		gettimeofday(&startloop, NULL);
+		if (usec_tot >= 1000000) {
+			usec_tot -= 1000000;
+			fill_modifications(env, buffer);
+			send_message(env, env->sock, buffer);
+			env->seq++;
+		}
 		receive_answer(env->sock, env, (env->args.size >= sizeof(struct timeval) ? (struct timeval *)(buffer + ICMP_HDR_SIZE) : NULL));
-		env->seq++;
 		if ((env->args.flags & COUNT_FLAG) && env->seq > env->args.count) 
 			running = 0;
-		sleep(1);
+		gettimeofday(&endloop, NULL);
+		substract_timeval(&final, &endloop, &startloop);
+		usec_tot += (final.tv_sec * 1000000 + final.tv_usec);
 	}
 	print_end_stats(env);
 	return SUCCESS;
