@@ -424,8 +424,8 @@ void print_end_stats(struct s_env *env)
 			env->mdev.tv_sec /= env->received;
 			env->mdev.tv_usec /= env->received;
 		}
-
-		printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", (float)env->min.tv_sec * 1000 + (float)env->min.tv_usec / 1000, (float)env->avg.tv_sec * 1000 + (float)env->avg.tv_usec / 1000, (float)env->max.tv_sec * 1000 + (float)env->max.tv_usec / 1000 , (float)env->mdev.tv_sec * 1000 + (float)env->mdev.tv_usec / 1000 );
+		if (env->received)
+			printf("rtt min/avg/max/mdev = %.3f/%.3f/%.3f/%.3f ms\n", (float)env->min.tv_sec * 1000 + (float)env->min.tv_usec / 1000, (float)env->avg.tv_sec * 1000 + (float)env->avg.tv_usec / 1000, (float)env->max.tv_sec * 1000 + (float)env->max.tv_usec / 1000 , (float)env->mdev.tv_sec * 1000 + (float)env->mdev.tv_usec / 1000 );
 	}
 }
 
